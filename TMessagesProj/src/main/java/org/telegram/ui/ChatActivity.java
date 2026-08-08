@@ -1420,26 +1420,14 @@ public class ChatActivity extends BaseFragment implements
 
     public void showHeaderItem(boolean show) {
         if (show) {
-            if (chatActivityEnterView.hasText() && TextUtils.isEmpty(chatActivityEnterView.getSlowModeTimer()) && !isSidebarAttach()) {
-                if (attachItem != null) {
-                    attachItem.setVisibility(View.VISIBLE);
-                }
-                if (headerItem != null) {
-                    headerItem.setVisibility(View.GONE);
-                }
-                if (otherIcon != null) {
-                    otherIcon.setIconVisible(true);
-                }
-            } else {
-                if (attachItem != null) {
-                    attachItem.setVisibility(View.GONE);
-                }
-                if (headerItem != null) {
-                    headerItem.setVisibility(View.VISIBLE);
-                }
-                if (otherIcon != null) {
-                    otherIcon.setIconVisible(false);
-                }
+            if (attachItem != null) {
+                attachItem.setVisibility(View.GONE);
+            }
+            if (headerItem != null) {
+                headerItem.setVisibility(View.VISIBLE);
+            }
+            if (otherIcon != null) {
+                otherIcon.setIconVisible(false);
             }
         } else {
             if (attachItem != null) {
@@ -2187,6 +2175,90 @@ public class ChatActivity extends BaseFragment implements
             if (suggestEmojiPanel != null) {
                 suggestEmojiPanel.onTextSelectionChanged(start, end);
             }
+            if (end - start > 0) {
+                if (editTextItem.getTag() == null) {
+                    editTextItem.setTag(1);
+
+                    if (editTextItem.getVisibility() != View.VISIBLE) {
+                        if (chatMode == MODE_SAVED && getSavedDialogId() == getUserConfig().getClientUserId() || chatMode == 0 && (threadMessageId == 0 || isTopic) && !UserObject.isReplyUser(currentUser) && !isReport()) {
+                            editTextItem.setVisibility(View.VISIBLE);
+                            checkEditTextItemMenu();
+                            if (headerItem != null) {
+                                headerItem.setVisibility(View.GONE);
+                            }
+                            if (attachItem != null) {
+                                attachItem.setVisibility(View.GONE);
+                            }
+                            if (otherIcon != null) {
+                                otherIcon.setIconVisible(false);
+                            }
+                        } else {
+                            ValueAnimator valueAnimator = ValueAnimator.ofFloat(AndroidUtilities.dp(48), 0);
+                            valueAnimator.setDuration(220);
+                            valueAnimator.setInterpolator(CubicBezierInterpolator.DEFAULT);
+                            valueAnimator.addListener(new AnimatorListenerAdapter() {
+                                @Override
+                                public void onAnimationStart(Animator animation) {
+                                    actionBar.setMenuOffsetSuppressed(true);
+                                    checkEditTextItemMenu();
+                                    editTextItem.setVisibility(View.VISIBLE);
+                                    menu.translateXItems(AndroidUtilities.dp(48));
+                                }
+
+                                @Override
+                                public void onAnimationEnd(Animator animation) {
+                                    actionBar.setMenuOffsetSuppressed(false);
+                                }
+                            });
+                            valueAnimator.addUpdateListener(animation -> menu.translateXItems((float) animation.getAnimatedValue()));
+                            valueAnimator.start();
+                        }
+                    }
+                }
+                editTextStart = start;
+                editTextEnd = end;
+            } else {
+                if (editTextItem.getTag() != null) {
+                    editTextItem.setTag(null);
+                    if (editTextItem.getVisibility() != View.GONE) {
+                        if (chatMode == MODE_SAVED && getSavedDialogId() == getUserConfig().getClientUserId() || chatMode == 0 && (threadMessageId == 0 || isTopic) && !UserObject.isReplyUser(currentUser) && !isReport()) {
+                            editTextItem.setVisibility(View.GONE);
+
+                            if (attachItem != null) {
+                                attachItem.setVisibility(View.GONE);
+                            }
+                            if (headerItem != null) {
+                                headerItem.setVisibility(View.VISIBLE);
+                            }
+                            if (otherIcon != null) {
+                                otherIcon.setIconVisible(false);
+                            }
+                        } else {
+                            ValueAnimator valueAnimator = ValueAnimator.ofFloat(0, AndroidUtilities.dp(48));
+                            valueAnimator.setDuration(220);
+                            valueAnimator.setInterpolator(CubicBezierInterpolator.DEFAULT);
+                            valueAnimator.addListener(new AnimatorListenerAdapter() {
+                                @Override
+                                public void onAnimationStart(Animator animation) {
+                                    actionBar.setMenuOffsetSuppressed(true);
+                                    isEditTextItemVisibilitySuppressed = true;
+                                }
+
+                                @Override
+                                public void onAnimationEnd(Animator animation) {
+                                    editTextItem.setVisibility(View.GONE);
+                                    menu.translateXItems(0);
+
+                                    actionBar.setMenuOffsetSuppressed(false);
+                                    isEditTextItemVisibilitySuppressed = false;
+                                }
+                            });
+                            valueAnimator.addUpdateListener(animation -> menu.translateXItems((float) animation.getAnimatedValue()));
+                            valueAnimator.start();
+                        }
+                    }
+                }
+            }
         }
 
         @Override
@@ -2246,16 +2318,17 @@ public class ChatActivity extends BaseFragment implements
             if (actionBar.isSearchFieldVisible() || isSidebarAttach()) {
                 return;
             }
-            if (TextUtils.isEmpty(chatActivityEnterView.getSlowModeTimer())) {
-                if (headerItem != null) {
-                    headerItem.setVisibility(View.GONE);
-                }
-                if (attachItem != null) {
-                    attachItem.setVisibility(View.VISIBLE);
-                }
-                if (otherIcon != null) {
-                    otherIcon.setIconVisible(true);
-                }
+            if (editTextItem != null && !isEditTextItemVisibilitySuppressed) {
+                editTextItem.setVisibility(View.GONE);
+            }
+            if (attachItem != null) {
+                attachItem.setVisibility(View.GONE);
+            }
+            if (headerItem != null) {
+                headerItem.setVisibility(View.VISIBLE);
+            }
+            if (otherIcon != null) {
+                otherIcon.setIconVisible(false);
             }
         }
 
@@ -39531,11 +39604,37 @@ public class ChatActivity extends BaseFragment implements
                 if (headerItem != null) {
                     headerItem.setVisibility(View.GONE);
                 }
+                if (editTextItem != null) {
+                    editTextItem.setVisibility(View.VISIBLE);
+                    checkEditTextItemMenu();
+                }
                 if (attachItem != null) {
-                    attachItem.setVisibility(View.VISIBLE);
+                    attachItem.setVisibility(View.GONE);
                 }
                 if (otherIcon != null) {
-                    otherIcon.setIconVisible(true);
+                    otherIcon.setIconVisible(false);
+                }
+                if (searchIconItem != null && showSearchAsIcon) {
+                    searchIconItem.setVisibility(View.GONE);
+                }
+                if (audioCallIconItem != null && showAudioCallAsIcon) {
+                    audioCallIconItem.setVisibility(View.GONE);
+                }
+                if (topicCreateItem != null) {
+                    topicCreateItem.setVisibility(View.GONE);
+                }
+            } else if (chatActivityEnterView.hasText() && TextUtils.isEmpty(chatActivityEnterView.getSlowModeTimer()) && (currentChat == null || ChatObject.canSendPlain(currentChat))) {
+                if (headerItem != null) {
+                    headerItem.setVisibility(View.VISIBLE);
+                }
+                if (editTextItem != null) {
+                    editTextItem.setVisibility(View.GONE);
+                }
+                if (attachItem != null) {
+                    attachItem.setVisibility(View.GONE);
+                }
+                if (otherIcon != null) {
+                    otherIcon.setIconVisible(false);
                 }
                 if (searchIconItem != null && showSearchAsIcon) {
                     searchIconItem.setVisibility(View.GONE);
