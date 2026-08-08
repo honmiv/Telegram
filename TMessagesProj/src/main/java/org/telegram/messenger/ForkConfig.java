@@ -8,4 +8,7 @@ package org.telegram.messenger;
 public class ForkConfig {
     /** Скрепка (attachButton) всегда отображается внизу справа в поле ввода */
     public static final boolean ALWAYS_SHOW_ATTACH_BOTTOM = true;
+
+    /** Отключение защиты контента (запрета пересылки, сохранения и скриншотов) */
+    public static final boolean DISABLE_CONTENT_PROTECTION = true;
 }
