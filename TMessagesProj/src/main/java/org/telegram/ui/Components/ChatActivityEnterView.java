@@ -125,6 +125,7 @@ import org.telegram.messenger.BotForumHelper;
 import org.telegram.messenger.BotWebViewVibrationEffect;
 import org.telegram.messenger.BuildVars;
 import org.telegram.messenger.ChatObject;
+import org.telegram.messenger.ForkConfig;
 import org.telegram.messenger.ContactsController;
 import org.telegram.messenger.DialogObject;
 import org.telegram.messenger.Emoji;
@@ -8062,6 +8063,11 @@ public class ChatActivityEnterView extends FrameLayout implements
                         if (sideButtons != null) {
                             sideButtons.showButton(ChatActivitySideControlsButtonsLayout.BUTTON_ATTACH, false, true);
                         }
+                        if (!ForkConfig.ALWAYS_SHOW_ATTACH_BOTTOM && attachButton != null) {
+                            animators.add(ObjectAnimator.ofFloat(attachButton, View.ALPHA, attachButtonAlpha = 0.0f));
+                            animators.add(ObjectAnimator.ofFloat(attachButton, View.SCALE_X, 0.5f));
+                            animators.add(ObjectAnimator.ofFloat(attachButton, View.SCALE_Y, 0.5f));
+                        }
                         if (scheduledButton != null) {
                             scheduledButton.setScaleY(1.0f);
                             if (hasScheduled) {
@@ -8191,6 +8197,11 @@ public class ChatActivityEnterView extends FrameLayout implements
                         if (sideButtons != null) {
                             sideButtons.showButton(ChatActivitySideControlsButtonsLayout.BUTTON_ATTACH, false, false);
                         }
+                        if (!ForkConfig.ALWAYS_SHOW_ATTACH_BOTTOM && attachButton != null) {
+                            attachButton.setAlpha(attachButtonAlpha = 0.0f);
+                            attachButton.setScaleX(0.5f);
+                            attachButton.setScaleY(0.5f);
+                        }
                     }
                     scheduleButtonHidden = false;
                     final boolean hasScheduled = delegate != null && delegate.hasScheduledMessages();
@@ -8254,7 +8265,16 @@ public class ChatActivityEnterView extends FrameLayout implements
                             attachButtonAnimator = null;
                         }
                         if (sideButtons != null) {
-                            sideButtons.showButton(ChatActivitySideControlsButtonsLayout.BUTTON_ATTACH, false, true);
+                            sideButtons.showButton(ChatActivitySideControlsButtonsLayout.BUTTON_ATTACH, ForkConfig.ALWAYS_SHOW_ATTACH_BOTTOM ? false : captionNearAttach, true);
+                            if (!ForkConfig.ALWAYS_SHOW_ATTACH_BOTTOM && attachButton != null) {
+                                animators.add(ObjectAnimator.ofFloat(attachButton, View.ALPHA, attachButtonAlpha = captionNearAttach ? 0.0f : 1.0f));
+                                animators.add(ObjectAnimator.ofFloat(attachButton, View.SCALE_X, captionNearAttach ? 0.5f : 1.0f));
+                                animators.add(ObjectAnimator.ofFloat(attachButton, View.SCALE_Y, captionNearAttach ? 0.5f : 1.0f));
+                            }
+                        } else if (!ForkConfig.ALWAYS_SHOW_ATTACH_BOTTOM && attachButton != null) {
+                            animators.add(ObjectAnimator.ofFloat(attachButton, View.ALPHA, attachButtonAlpha = 0.0f));
+                            animators.add(ObjectAnimator.ofFloat(attachButton, View.SCALE_X, 0.5f));
+                            animators.add(ObjectAnimator.ofFloat(attachButton, View.SCALE_Y, 0.5f));
                         }
                         boolean hasScheduled = delegate != null && delegate.hasScheduledMessages();
                         scheduleButtonHidden = true;
@@ -8412,13 +8432,13 @@ public class ChatActivityEnterView extends FrameLayout implements
                         updateFieldRight(0);
 
                         if (sideButtons != null) {
-                            sideButtons.showButton(ChatActivitySideControlsButtonsLayout.BUTTON_ATTACH, captionNearAttach && !recordShown, true);
-                            if (attachButton != null) {
-                                attachButton.setAlpha(attachButtonAlpha = attachInInput ? 1.0f : 0.0f);
-                                attachButton.setScaleX(attachInInput ? 1.0f : 0.5f);
-                                attachButton.setScaleY(attachInInput ? 1.0f : 0.5f);
+                            sideButtons.showButton(ChatActivitySideControlsButtonsLayout.BUTTON_ATTACH, ForkConfig.ALWAYS_SHOW_ATTACH_BOTTOM ? false : captionNearAttach, true);
+                            if (!ForkConfig.ALWAYS_SHOW_ATTACH_BOTTOM && attachButton != null) {
+                                attachButton.setAlpha(attachButtonAlpha = captionNearAttach ? 0.0f : 1.0f);
+                                attachButton.setScaleX(captionNearAttach ? 0.5f : 1.0f);
+                                attachButton.setScaleY(captionNearAttach ? 0.5f : 1.0f);
                             }
-                        } else if (attachButton != null) {
+                        } else if (!ForkConfig.ALWAYS_SHOW_ATTACH_BOTTOM && attachButton != null) {
                             attachButton.setAlpha(attachButtonAlpha = 0.0f);
                             attachButton.setScaleX(0.5f);
                             attachButton.setScaleY(0.5f);
@@ -8438,16 +8458,16 @@ public class ChatActivityEnterView extends FrameLayout implements
                 }
             } else {
                 if (sideButtons != null) {
-                    sideButtons.showButton(ChatActivitySideControlsButtonsLayout.BUTTON_ATTACH, captionNearAttach && !recordShown, true);
-                    if (attachButton != null) {
+                    sideButtons.showButton(ChatActivitySideControlsButtonsLayout.BUTTON_ATTACH, ForkConfig.ALWAYS_SHOW_ATTACH_BOTTOM ? false : captionNearAttach, true);
+                    if (!ForkConfig.ALWAYS_SHOW_ATTACH_BOTTOM && attachButton != null) {
                         if (attachButtonAnimator != null) {
                             attachButtonAnimator.cancel();
                             attachButtonAnimator = null;
                         }
                         attachButtonAnimator = attachButton.animate()
-                            .alpha(attachButtonAlpha = attachInInput ? 1.0f : 0.0f)
-                            .scaleX(attachInInput ? 1.0f : 0.5f)
-                            .scaleY(attachInInput ? 1.0f : 0.5f)
+                            .alpha(attachButtonAlpha = captionNearAttach ? 0.0f : 1.0f)
+                            .scaleX(captionNearAttach ? 0.5f : 1.0f)
+                            .scaleY(captionNearAttach ? 0.5f : 1.0f)
                             .setInterpolator(CubicBezierInterpolator.EASE_OUT_QUINT)
                             .setDuration(320);
                         attachButtonAnimator.start();
@@ -8874,7 +8894,7 @@ public class ChatActivityEnterView extends FrameLayout implements
         } else {
             if (scheduledButton != null && scheduledButton.getTag() != null) {
                 layoutParams.rightMargin = dp(50);
-            } else if (attachButton != null) {
+            } else if (ForkConfig.ALWAYS_SHOW_ATTACH_BOTTOM && attachButton != null) {
                 layoutParams.rightMargin = dp(50);
             } else {
                 layoutParams.rightMargin = dp(2);
