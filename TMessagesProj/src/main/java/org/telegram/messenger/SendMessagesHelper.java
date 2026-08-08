@@ -103,6 +103,8 @@ import org.telegram.ui.Stories.MessageMediaStoryFull;
 import org.telegram.ui.TwoStepVerificationActivity;
 import org.telegram.ui.TwoStepVerificationSetupActivity;
 
+import org.telegram.messenger.ForkConfig;
+
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -1768,6 +1770,34 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
         if (messageObject == null) {
             return;
         }
+        ArrayList<TLRPC.MessageEntity> entities = null;
+        if (messageObject.messageOwner.entities != null && !messageObject.messageOwner.entities.isEmpty()) {
+            entities = new ArrayList<>();
+            for (int a = 0; a < messageObject.messageOwner.entities.size(); a++) {
+                TLRPC.MessageEntity entity = messageObject.messageOwner.entities.get(a);
+                if (entity instanceof TLRPC.TL_messageEntityBold ||
+                        entity instanceof TLRPC.TL_messageEntityItalic ||
+                        entity instanceof TLRPC.TL_messageEntityStrike ||
+                        entity instanceof TLRPC.TL_messageEntityUnderline ||
+                        entity instanceof TLRPC.TL_messageEntityPre ||
+                        entity instanceof TLRPC.TL_messageEntityCode ||
+                        entity instanceof TLRPC.TL_messageEntityTextUrl ||
+                        entity instanceof TLRPC.TL_messageEntityUrl ||
+                        entity instanceof TLRPC.TL_messageEntityMention ||
+                        entity instanceof TLRPC.TL_messageEntityMentionName ||
+                        entity instanceof TLRPC.TL_messageEntityHashtag ||
+                        entity instanceof TLRPC.TL_messageEntityCashtag ||
+                        entity instanceof TLRPC.TL_messageEntityEmail ||
+                        entity instanceof TLRPC.TL_messageEntityPhone ||
+                        entity instanceof TLRPC.TL_messageEntityBankCard ||
+                        entity instanceof TLRPC.TL_messageEntitySpoiler ||
+                        entity instanceof TLRPC.TL_messageEntityBlockquote ||
+                        entity instanceof TLRPC.TL_messageEntityCustomEmoji) {
+                    entities.add(entity);
+                }
+            }
+        }
+
         if (messageObject.messageOwner.media != null && !(messageObject.messageOwner.media instanceof TLRPC.TL_messageMediaEmpty) && !(messageObject.messageOwner.media instanceof TLRPC.TL_messageMediaWebPage) && !(messageObject.messageOwner.media instanceof TLRPC.TL_messageMediaGame) && !(messageObject.messageOwner.media instanceof TLRPC.TL_messageMediaInvoice)) {
             HashMap<String, String> params = null;
             if (DialogObject.isEncryptedDialog(did) && messageObject.messageOwner.peer_id != null && (messageObject.messageOwner.media.photo instanceof TLRPC.TL_photo || messageObject.messageOwner.media.document instanceof TLRPC.TL_document)) {
@@ -1775,19 +1805,23 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
                 params.put("parentObject", "sent_" + messageObject.messageOwner.peer_id.channel_id + "_" + messageObject.getId() + "_" + messageObject.getDialogId() + "_" + messageObject.type + "_" + messageObject.getSize());
             }
             if (messageObject.messageOwner.media.photo instanceof TLRPC.TL_photo) {
-                SendMessagesHelper.SendMessageParams fparams = SendMessagesHelper.SendMessageParams.of((TLRPC.TL_photo) messageObject.messageOwner.media.photo, null, did, messageObject.replyMessageObject, null, messageObject.messageOwner.message, messageObject.messageOwner.entities, null, params, true, 0, 0, messageObject.messageOwner.media.ttl_seconds, messageObject, false);
-                fparams.payStars = payStars;
-                fparams.monoForumPeer = monoForumPeerId;
-                fparams.suggestionParams = suggestionParams;
-                sendMessage(fparams);
+                java.io.File localFile = FileLoader.getInstance(currentAccount).getPathToMessage(messageObject.messageOwner);
+                if (localFile != null && localFile.exists()) {
+                    prepareSendingPhoto(AccountInstance.getInstance(currentAccount), localFile.getAbsolutePath(), null, null, did, null, null, null, null, entities, null, null, messageObject.messageOwner.media.ttl_seconds, null, null, true, 0, 0, 0, false, messageObject.messageOwner.message, null, 0, 0, payStars, monoForumPeerId, suggestionParams);
+                } else {
+                    AndroidUtilities.runOnUIThread(() -> android.widget.Toast.makeText(ApplicationLoader.applicationContext, "Please download the photo first to forward it from a restricted chat.", android.widget.Toast.LENGTH_SHORT).show());
+                }
             } else if (messageObject.messageOwner.media.document instanceof TLRPC.TL_document) {
-                SendMessagesHelper.SendMessageParams fparams = SendMessagesHelper.SendMessageParams.of((TLRPC.TL_document) messageObject.messageOwner.media.document, null, messageObject.messageOwner.attachPath, did, messageObject.replyMessageObject, null, messageObject.messageOwner.message, messageObject.messageOwner.entities, null, params, true, 0, 0, messageObject.messageOwner.media.ttl_seconds, messageObject, null, false);
-                fparams.payStars = payStars;
-                fparams.monoForumPeer = monoForumPeerId;
-                fparams.suggestionParams = suggestionParams;
-                sendMessage(fparams);
+                java.io.File localFile = FileLoader.getInstance(currentAccount).getPathToMessage(messageObject.messageOwner);
+                if (localFile != null && localFile.exists()) {
+                    ArrayList<String> paths = new ArrayList<>();
+                    paths.add(localFile.getAbsolutePath());
+                    prepareSendingDocuments(AccountInstance.getInstance(currentAccount), paths, paths, null, messageObject.messageOwner.message, entities, null, did, null, null, null, null, null, true, 0, 0, null, null, 0, 0, false, payStars, monoForumPeerId, suggestionParams, null, null, null, false);
+                } else {
+                    AndroidUtilities.runOnUIThread(() -> android.widget.Toast.makeText(ApplicationLoader.applicationContext, "Please download the document first to forward it from a restricted chat.", android.widget.Toast.LENGTH_SHORT).show());
+                }
             } else if (messageObject.messageOwner.media instanceof TLRPC.TL_messageMediaVenue || messageObject.messageOwner.media instanceof TLRPC.TL_messageMediaGeo) {
-                SendMessagesHelper.SendMessageParams fparams = SendMessagesHelper.SendMessageParams.of(messageObject.messageOwner.media, did, messageObject.replyMessageObject, null, null, null, true, 0, 0);
+                SendMessagesHelper.SendMessageParams fparams = SendMessagesHelper.SendMessageParams.of(messageObject.messageOwner.media, did, null, null, null, null, true, 0, 0);
                 fparams.payStars = payStars;
                 fparams.monoForumPeer = monoForumPeerId;
                 fparams.suggestionParams = suggestionParams;
@@ -1798,7 +1832,7 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
                 user.first_name = messageObject.messageOwner.media.first_name;
                 user.last_name = messageObject.messageOwner.media.last_name;
                 user.id = messageObject.messageOwner.media.user_id;
-                SendMessagesHelper.SendMessageParams fparams = SendMessagesHelper.SendMessageParams.of(user, did, messageObject.replyMessageObject, null, null, null, true, 0, 0);
+                SendMessagesHelper.SendMessageParams fparams = SendMessagesHelper.SendMessageParams.of(user, did, null, null, null, null, true, 0, 0);
                 fparams.monoForumPeer = monoForumPeerId;
                 fparams.suggestionParams = suggestionParams;
                 fparams.payStars = payStars;
@@ -1813,25 +1847,7 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
             if (messageObject.messageOwner.media instanceof TLRPC.TL_messageMediaWebPage) {
                 webPage = messageObject.messageOwner.media.webpage;
             }
-            ArrayList<TLRPC.MessageEntity> entities;
-            if (messageObject.messageOwner.entities != null && !messageObject.messageOwner.entities.isEmpty()) {
-                entities = new ArrayList<>();
-                for (int a = 0; a < messageObject.messageOwner.entities.size(); a++) {
-                    TLRPC.MessageEntity entity = messageObject.messageOwner.entities.get(a);
-                    if (entity instanceof TLRPC.TL_messageEntityBold ||
-                            entity instanceof TLRPC.TL_messageEntityItalic ||
-                            entity instanceof TLRPC.TL_messageEntityPre ||
-                            entity instanceof TLRPC.TL_messageEntityCode ||
-                            entity instanceof TLRPC.TL_messageEntityTextUrl ||
-                            entity instanceof TLRPC.TL_messageEntitySpoiler ||
-                            entity instanceof TLRPC.TL_messageEntityCustomEmoji) {
-                        entities.add(entity);
-                    }
-                }
-            } else {
-                entities = null;
-            }
-            SendMessagesHelper.SendMessageParams fparams = SendMessagesHelper.SendMessageParams.of(messageObject.messageOwner.message, did, messageObject.replyMessageObject, null, webPage, true, entities, null, null, true, 0, 0, null, false);
+            SendMessagesHelper.SendMessageParams fparams = SendMessagesHelper.SendMessageParams.of(messageObject.messageOwner.message, did, null, null, webPage, true, entities, null, null, true, 0, 0, null, false);
             fparams.payStars = payStars;
             fparams.monoForumPeer = monoForumPeerId;
             fparams.suggestionParams = suggestionParams;
@@ -2163,6 +2179,85 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
                     }
                     continue;
                 }
+
+                boolean isNoforwards = msgObj.messageOwner != null && msgObj.messageOwner.noforwards;
+                if (!isNoforwards && msgObj.getDialogId() < 0) {
+                    TLRPC.Chat sourceChat = getMessagesController().getChat(-msgObj.getDialogId());
+                    if (sourceChat != null) isNoforwards = sourceChat.noforwards;
+                } else if (!isNoforwards && msgObj.getDialogId() > 0) {
+                    TLRPC.UserFull userFull = getMessagesController().getUserFull(msgObj.getDialogId());
+                    if (userFull != null) isNoforwards = userFull.noforwards_peer_enabled || userFull.noforwards_my_enabled;
+                }
+                if (ForkConfig.DISABLE_CONTENT_PROTECTION && isNoforwards && !forwardFromMyName) {
+                    String headerText = "";
+                    if (msgObj.messageOwner.fwd_from != null) {
+                        if (msgObj.messageOwner.fwd_from.from_id != null) {
+                            long fromId = DialogObject.getPeerDialogId(msgObj.messageOwner.fwd_from.from_id);
+                            if (fromId > 0) {
+                                TLRPC.User fromUser = getMessagesController().getUser(fromId);
+                                if (fromUser != null) headerText = ContactsController.formatName(fromUser.first_name, fromUser.last_name);
+                            } else {
+                                TLRPC.Chat fromChat = getMessagesController().getChat(-fromId);
+                                if (fromChat != null) headerText = fromChat.title;
+                            }
+                        } else if (msgObj.messageOwner.fwd_from.from_name != null) {
+                            headerText = msgObj.messageOwner.fwd_from.from_name;
+                        }
+                    } else if (msgObj.getDialogId() < 0) {
+                        TLRPC.Chat fromChat = getMessagesController().getChat(-msgObj.getDialogId());
+                        if (fromChat != null) headerText = fromChat.title;
+                    } else if (msgObj.getDialogId() > 0) {
+                        TLRPC.User fromUser = getMessagesController().getUser(msgObj.getDialogId());
+                        if (fromUser != null) headerText = ContactsController.formatName(fromUser.first_name, fromUser.last_name);
+                    }
+
+                    String channelName = headerText;
+                    if (!TextUtils.isEmpty(channelName)) {
+                        headerText = "\n\nFrom: " + channelName;
+                    }
+
+                    String originalMessage = msgObj.messageOwner.message;
+                    ArrayList<TLRPC.MessageEntity> originalEntities = msgObj.messageOwner.entities;
+                    if (!TextUtils.isEmpty(channelName)) {
+                        msgObj.messageOwner.message = (originalMessage == null ? "" : originalMessage) + headerText;
+                        if (msgObj.messageOwner.entities == null) {
+                            msgObj.messageOwner.entities = new ArrayList<>();
+                        } else {
+                            msgObj.messageOwner.entities = new ArrayList<>(msgObj.messageOwner.entities);
+                        }
+                        
+                        TLRPC.TL_messageEntityBlockquote quoteEntity = new TLRPC.TL_messageEntityBlockquote();
+                        quoteEntity.offset = (originalMessage == null ? 0 : originalMessage.length()) + 2;
+                        quoteEntity.length = headerText.length() - 2;
+                        msgObj.messageOwner.entities.add(quoteEntity);
+
+                        TLRPC.TL_messageEntityBold boldEntity = new TLRPC.TL_messageEntityBold();
+                        boldEntity.offset = (originalMessage == null ? 0 : originalMessage.length()) + 8;
+                        boldEntity.length = channelName.length();
+                        msgObj.messageOwner.entities.add(boldEntity);
+                    }
+
+                    MessageObject originalReply = msgObj.replyMessageObject;
+                    TLRPC.MessageReplyHeader originalReplyHeader = msgObj.messageOwner.reply_to;
+                    int originalFlags = msgObj.messageOwner.flags;
+
+                    msgObj.replyMessageObject = null;
+                    msgObj.messageOwner.reply_to = null;
+                    msgObj.messageOwner.flags &= ~TLRPC.MESSAGE_FLAG_REPLY;
+
+                    processForwardFromMyName(msgObj, peer, payStars, monoForumPeerId, suggestionParams);
+
+                    msgObj.replyMessageObject = originalReply;
+                    msgObj.messageOwner.reply_to = originalReplyHeader;
+                    msgObj.messageOwner.flags = originalFlags;
+
+                    if (!TextUtils.isEmpty(channelName)) {
+                        msgObj.messageOwner.message = originalMessage;
+                        msgObj.messageOwner.entities = originalEntities;
+                    }
+                    continue;
+                }
+
                 boolean mediaIsSticker = (msgObj.isSticker() || msgObj.isAnimatedSticker() || msgObj.isGif() || msgObj.isGame());
                 if (!canSendStickers && mediaIsSticker) {
                     if (sendResult == 0) {
