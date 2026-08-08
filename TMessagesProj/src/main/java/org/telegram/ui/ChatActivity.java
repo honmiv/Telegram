@@ -146,6 +146,7 @@ import org.telegram.messenger.ChannelBoostsController;
 import org.telegram.messenger.ChatMessageSharedResources;
 import org.telegram.messenger.ChatMessagesMetadataController;
 import org.telegram.messenger.ChatObject;
+import org.telegram.messenger.ForkConfig;
 import org.telegram.messenger.ChatThemeController;
 import org.telegram.messenger.CodeHighlighting;
 import org.telegram.messenger.ContactsController;
@@ -1363,14 +1364,26 @@ public class ChatActivity extends BaseFragment implements
 
     public void showHeaderItem(boolean show) {
         if (show) {
-            if (attachItem != null) {
-                attachItem.setVisibility(View.GONE);
-            }
-            if (headerItem != null) {
-                headerItem.setVisibility(View.VISIBLE);
-            }
-            if (otherIcon != null) {
-                otherIcon.setIconVisible(false);
+            if (!ForkConfig.ALWAYS_SHOW_ATTACH_BOTTOM && chatActivityEnterView.hasText() && TextUtils.isEmpty(chatActivityEnterView.getSlowModeTimer())) {
+                if (attachItem != null) {
+                    attachItem.setVisibility(View.VISIBLE);
+                }
+                if (headerItem != null) {
+                    headerItem.setVisibility(View.GONE);
+                }
+                if (otherIcon != null) {
+                    otherIcon.setIconVisible(true);
+                }
+            } else {
+                if (attachItem != null) {
+                    attachItem.setVisibility(View.GONE);
+                }
+                if (headerItem != null) {
+                    headerItem.setVisibility(View.VISIBLE);
+                }
+                if (otherIcon != null) {
+                    otherIcon.setIconVisible(false);
+                }
             }
         } else {
             if (attachItem != null) {
@@ -2129,14 +2142,26 @@ public class ChatActivity extends BaseFragment implements
                         if (chatMode == MODE_SAVED && getSavedDialogId() == getUserConfig().getClientUserId() || chatMode == 0 && (threadMessageId == 0 || isTopic) && !UserObject.isReplyUser(currentUser) && !isReport()) {
                             editTextItem.setVisibility(View.GONE);
 
-                            if (attachItem != null) {
-                                attachItem.setVisibility(View.GONE);
-                            }
-                            if (headerItem != null) {
-                                headerItem.setVisibility(View.VISIBLE);
-                            }
-                            if (otherIcon != null) {
-                                otherIcon.setIconVisible(false);
+                            if (!ForkConfig.ALWAYS_SHOW_ATTACH_BOTTOM && chatActivityEnterView.hasText() && TextUtils.isEmpty(chatActivityEnterView.getSlowModeTimer())) {
+                                if (headerItem != null) {
+                                    headerItem.setVisibility(View.GONE);
+                                }
+                                if (attachItem != null) {
+                                    attachItem.setVisibility(View.VISIBLE);
+                                }
+                                if (otherIcon != null) {
+                                    otherIcon.setIconVisible(true);
+                                }
+                            } else {
+                                if (headerItem != null) {
+                                    headerItem.setVisibility(View.VISIBLE);
+                                }
+                                if (attachItem != null) {
+                                    attachItem.setVisibility(View.GONE);
+                                }
+                                if (otherIcon != null) {
+                                    otherIcon.setIconVisible(false);
+                                }
                             }
                         } else {
                             ValueAnimator valueAnimator = ValueAnimator.ofFloat(0, AndroidUtilities.dp(48));
@@ -2226,14 +2251,26 @@ public class ChatActivity extends BaseFragment implements
             if (editTextItem != null && !isEditTextItemVisibilitySuppressed) {
                 editTextItem.setVisibility(View.GONE);
             }
-            if (attachItem != null) {
-                attachItem.setVisibility(View.GONE);
-            }
-            if (headerItem != null) {
-                headerItem.setVisibility(View.VISIBLE);
-            }
-            if (otherIcon != null) {
-                otherIcon.setIconVisible(false);
+            if (!ForkConfig.ALWAYS_SHOW_ATTACH_BOTTOM && TextUtils.isEmpty(chatActivityEnterView.getSlowModeTimer())) {
+                if (headerItem != null) {
+                    headerItem.setVisibility(View.GONE);
+                }
+                if (attachItem != null) {
+                    attachItem.setVisibility(View.VISIBLE);
+                }
+                if (otherIcon != null) {
+                    otherIcon.setIconVisible(true);
+                }
+            } else {
+                if (attachItem != null) {
+                    attachItem.setVisibility(View.GONE);
+                }
+                if (headerItem != null) {
+                    headerItem.setVisibility(View.VISIBLE);
+                }
+                if (otherIcon != null) {
+                    otherIcon.setIconVisible(false);
+                }
             }
         }
 
@@ -38284,18 +38321,18 @@ public class ChatActivity extends BaseFragment implements
                 if (topicCreateItem != null) {
                     topicCreateItem.setVisibility(View.GONE);
                 }
-            } else if (chatActivityEnterView.hasText() && TextUtils.isEmpty(chatActivityEnterView.getSlowModeTimer()) && (currentChat == null || ChatObject.canSendPlain(currentChat))) {
+            } else if (!ForkConfig.ALWAYS_SHOW_ATTACH_BOTTOM && chatActivityEnterView.hasText() && TextUtils.isEmpty(chatActivityEnterView.getSlowModeTimer()) && (currentChat == null || ChatObject.canSendPlain(currentChat))) {
                 if (headerItem != null) {
-                    headerItem.setVisibility(View.VISIBLE);
+                    headerItem.setVisibility(View.GONE);
                 }
                 if (editTextItem != null) {
                     editTextItem.setVisibility(View.GONE);
                 }
                 if (attachItem != null) {
-                    attachItem.setVisibility(View.GONE);
+                    attachItem.setVisibility(View.VISIBLE);
                 }
                 if (otherIcon != null) {
-                    otherIcon.setIconVisible(false);
+                    otherIcon.setIconVisible(true);
                 }
                 if (searchIconItem != null && showSearchAsIcon) {
                     searchIconItem.setVisibility(View.GONE);
