@@ -6708,6 +6708,9 @@ public class MessagesController extends BaseController implements NotificationCe
     }
 
     public boolean isChatNoForwards(TLRPC.Chat chat) {
+        if (ForkConfig.DISABLE_CONTENT_PROTECTION) {
+            return false;
+        }
         if (chat == null) {
             return false;
         }
@@ -6721,18 +6724,30 @@ public class MessagesController extends BaseController implements NotificationCe
     }
 
     public boolean isChatNoForwards(long chatId) {
+        if (ForkConfig.DISABLE_CONTENT_PROTECTION) {
+            return false;
+        }
         return isChatNoForwards(getChat(chatId));
     }
 
     public boolean isPeerNoForwards(long dialogId) {
+        if (ForkConfig.DISABLE_CONTENT_PROTECTION) {
+            return false;
+        }
         return dialogId > 0 ? isUserNoForwards(dialogId) : isChatNoForwards(-dialogId);
     }
 
     public boolean isUserNoForwards(long userId) {
+        if (ForkConfig.DISABLE_CONTENT_PROTECTION) {
+            return false;
+        }
         return isUserNoForwards(getUserFull(userId));
     }
 
     public boolean isUserNoForwards(TLRPC.UserFull userFull) {
+        if (ForkConfig.DISABLE_CONTENT_PROTECTION) {
+            return false;
+        }
         if (userFull == null) {
             return false;
         }

@@ -9112,8 +9112,8 @@ public class MessageObject {
         public TextLayoutBlocks(MessageObject messageObject, @NonNull CharSequence text, TextPaint textPaint, int width) {
             this.text = text;
             textWidth = 0;
-            boolean noforwards = messageObject != null && messageObject.messageOwner != null && messageObject.messageOwner.noforwards;
-            if (messageObject != null && !noforwards) {
+            boolean noforwards = !ForkConfig.DISABLE_CONTENT_PROTECTION && messageObject != null && messageObject.messageOwner != null && messageObject.messageOwner.noforwards;
+            if (!ForkConfig.DISABLE_CONTENT_PROTECTION && messageObject != null && !noforwards) {
                 final long dialogId = messageObject.getDialogId();
                 noforwards = MessagesController.getInstance(messageObject.currentAccount).isPeerNoForwards(dialogId);
             }
@@ -11540,7 +11540,7 @@ public class MessageObject {
     public boolean canForwardMessage() {
         if (isQuickReply() || isEphemeral()) return false;
         if (type == TYPE_GIFT_STARS || type == TYPE_GIFT_THEME_UPDATE || type == TYPE_SUGGEST_BIRTHDAY || type == TYPE_GIFT_OFFER || type == TYPE_SHARING_OFFER || type == TYPE_COMMUNITY_CHANGED) return false;
-        return !(messageOwner instanceof TLRPC.TL_message_secret) && !needDrawBluredPreview() && !isLiveLocation() && type != MessageObject.TYPE_PHONE_CALL && !isSponsored() && !messageOwner.noforwards;
+        return !(messageOwner instanceof TLRPC.TL_message_secret) && !needDrawBluredPreview() && !isLiveLocation() && type != MessageObject.TYPE_PHONE_CALL && !isSponsored() && (ForkConfig.DISABLE_CONTENT_PROTECTION || !messageOwner.noforwards);
     }
 
     public boolean canEditMedia() {

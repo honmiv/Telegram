@@ -6,6 +6,8 @@ import static org.telegram.messenger.AndroidUtilities.dp;
 import static org.telegram.messenger.AndroidUtilities.isContextSafe;
 import static org.telegram.messenger.AndroidUtilities.lerp;
 
+import org.telegram.messenger.ForkConfig;
+
 import android.animation.Animator;
 import android.animation.AnimatorListenerAdapter;
 import android.animation.ValueAnimator;
@@ -2874,7 +2876,9 @@ public class StoryViewer implements NotificationCenter.NotificationCenterDelegat
     }
 
     public void allowScreenshots(boolean allowScreenshots) {
-        if (BuildVars.DEBUG_PRIVATE_VERSION) {
+        if (ForkConfig.DISABLE_CONTENT_PROTECTION) {
+            allowScreenshots = true;
+        } else if (BuildVars.DEBUG_PRIVATE_VERSION) {
             return;
         }
         allowScreenshots = !isShowing || allowScreenshots;
