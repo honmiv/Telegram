@@ -11,4 +11,7 @@ public class ForkConfig {
 
     /** Отключение защиты контента (запрета пересылки, сохранения и скриншотов) */
     public static final boolean DISABLE_CONTENT_PROTECTION = true;
+
+    /** Инверсия галочки "Удалить у всех" (по умолчанию удаляет у всех, по галочке - только у себя) */
+    public static final boolean INVERT_DELETE_FOR_ALL_LOGIC = true;
 }

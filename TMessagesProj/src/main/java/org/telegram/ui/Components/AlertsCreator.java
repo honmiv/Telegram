@@ -8042,23 +8042,40 @@ public class AlertsCreator {
                 return;
             } else if (!hasNotOut && myMessagesCount > 0 && hasNonDiceMessages) {
                 hasDeleteForAllCheck = true;
-                FrameLayout frameLayout = new FrameLayout(activity);
-                CheckBoxCell cell = new CheckBoxCell(activity, 1, resourcesProvider);
-                cell.setBackgroundDrawable(Theme.getSelectorDrawable(false));
-                if (chat != null && hasNotOut) {
-                    cell.setText(LocaleController.getString(R.string.DeleteForAll), "", false, false);
+                if (org.telegram.messenger.ForkConfig.INVERT_DELETE_FOR_ALL_LOGIC) {
+                    deleteForAll[0] = true;
+                    FrameLayout frameLayout = new FrameLayout(activity);
+                    CheckBoxCell cell = new CheckBoxCell(activity, 1, resourcesProvider);
+                    cell.setBackgroundDrawable(Theme.getSelectorDrawable(false));
+                    cell.setText(LocaleController.getString(R.string.DeleteMessagesOptionOnlyMe), "", false, false);
+                    cell.setPadding(LocaleController.isRTL ? dp(16) : dp(8), 0, LocaleController.isRTL ? dp(8) : dp(16), 0);
+                    frameLayout.addView(cell, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 48, Gravity.TOP | Gravity.LEFT, 0, 0, 0, 0));
+                    cell.setOnClickListener(v -> {
+                        CheckBoxCell cell12 = (CheckBoxCell) v;
+                        deleteForAll[0] = !deleteForAll[0];
+                        cell12.setChecked(!deleteForAll[0], true);
+                    });
+                    builder.setView(frameLayout);
+                    builder.setCustomViewOffset(9);
                 } else {
-                    cell.setText(LocaleController.getString(R.string.DeleteMessagesOption), "", false, false);
+                    FrameLayout frameLayout = new FrameLayout(activity);
+                    CheckBoxCell cell = new CheckBoxCell(activity, 1, resourcesProvider);
+                    cell.setBackgroundDrawable(Theme.getSelectorDrawable(false));
+                    if (chat != null && hasNotOut) {
+                        cell.setText(LocaleController.getString(R.string.DeleteForAll), "", false, false);
+                    } else {
+                        cell.setText(LocaleController.getString(R.string.DeleteMessagesOption), "", false, false);
+                    }
+                    cell.setPadding(LocaleController.isRTL ? dp(16) : dp(8), 0, LocaleController.isRTL ? dp(8) : dp(16), 0);
+                    frameLayout.addView(cell, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 48, Gravity.TOP | Gravity.LEFT, 0, 0, 0, 0));
+                    cell.setOnClickListener(v -> {
+                        CheckBoxCell cell12 = (CheckBoxCell) v;
+                        deleteForAll[0] = !deleteForAll[0];
+                        cell12.setChecked(deleteForAll[0], true);
+                    });
+                    builder.setView(frameLayout);
+                    builder.setCustomViewOffset(9);
                 }
-                cell.setPadding(LocaleController.isRTL ? dp(16) : dp(8), 0, LocaleController.isRTL ? dp(8) : dp(16), 0);
-                frameLayout.addView(cell, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 48, Gravity.TOP | Gravity.LEFT, 0, 0, 0, 0));
-                cell.setOnClickListener(v -> {
-                    CheckBoxCell cell12 = (CheckBoxCell) v;
-                    deleteForAll[0] = !deleteForAll[0];
-                    cell12.setChecked(deleteForAll[0], true);
-                });
-                builder.setView(frameLayout);
-                builder.setCustomViewOffset(9);
             }
         } else if (!scheduled && !isSavedMessages && !ChatObject.isChannel(chat) && encryptedChat == null) {
             if (user != null && user.id != UserConfig.getInstance(currentAccount).getClientUserId() && (!user.bot || user.support) || chat != null) {
@@ -8099,25 +8116,42 @@ public class AlertsCreator {
             }
             if (myMessagesCount > 0 && hasNonDiceMessages && (user == null || !UserObject.isDeleted(user))) {
                 hasDeleteForAllCheck = true;
-                FrameLayout frameLayout = new FrameLayout(activity);
-                CheckBoxCell cell = new CheckBoxCell(activity, 1, resourcesProvider);
-                cell.setBackgroundDrawable(Theme.getSelectorDrawable(false));
-                if (canDeleteInbox) {
-                    cell.setText(LocaleController.formatString("DeleteMessagesOptionAlso", R.string.DeleteMessagesOptionAlso, UserObject.getFirstName(user)), "", false, false);
-                } else if (chat != null && (hasNotOut || myMessagesCount == count)) {
-                    cell.setText(LocaleController.getString(R.string.DeleteForAll), "", false, false);
+                if (org.telegram.messenger.ForkConfig.INVERT_DELETE_FOR_ALL_LOGIC) {
+                    deleteForAll[0] = true;
+                    FrameLayout frameLayout = new FrameLayout(activity);
+                    CheckBoxCell cell = new CheckBoxCell(activity, 1, resourcesProvider);
+                    cell.setBackgroundDrawable(Theme.getSelectorDrawable(false));
+                    cell.setText(LocaleController.getString(R.string.DeleteMessagesOptionOnlyMe), "", false, false);
+                    cell.setPadding(LocaleController.isRTL ? dp(16) : dp(8), 0, LocaleController.isRTL ? dp(8) : dp(16), 0);
+                    frameLayout.addView(cell, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 48, Gravity.TOP | Gravity.LEFT, 0, 0, 0, 0));
+                    cell.setOnClickListener(v -> {
+                        CheckBoxCell cell1 = (CheckBoxCell) v;
+                        deleteForAll[0] = !deleteForAll[0];
+                        cell1.setChecked(!deleteForAll[0], true);
+                    });
+                    builder.setView(frameLayout);
+                    builder.setCustomViewOffset(9);
                 } else {
-                    cell.setText(LocaleController.getString(R.string.DeleteMessagesOption), "", false, false);
+                    FrameLayout frameLayout = new FrameLayout(activity);
+                    CheckBoxCell cell = new CheckBoxCell(activity, 1, resourcesProvider);
+                    cell.setBackgroundDrawable(Theme.getSelectorDrawable(false));
+                    if (canDeleteInbox) {
+                        cell.setText(LocaleController.formatString("DeleteMessagesOptionAlso", R.string.DeleteMessagesOptionAlso, UserObject.getFirstName(user)), "", false, false);
+                    } else if (chat != null && (hasNotOut || myMessagesCount == count)) {
+                        cell.setText(LocaleController.getString(R.string.DeleteForAll), "", false, false);
+                    } else {
+                        cell.setText(LocaleController.getString(R.string.DeleteMessagesOption), "", false, false);
+                    }
+                    cell.setPadding(LocaleController.isRTL ? dp(16) : dp(8), 0, LocaleController.isRTL ? dp(8) : dp(16), 0);
+                    frameLayout.addView(cell, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 48, Gravity.TOP | Gravity.LEFT, 0, 0, 0, 0));
+                    cell.setOnClickListener(v -> {
+                        CheckBoxCell cell1 = (CheckBoxCell) v;
+                        deleteForAll[0] = !deleteForAll[0];
+                        cell1.setChecked(deleteForAll[0], true);
+                    });
+                    builder.setView(frameLayout);
+                    builder.setCustomViewOffset(9);
                 }
-                cell.setPadding(LocaleController.isRTL ? dp(16) : dp(8), 0, LocaleController.isRTL ? dp(8) : dp(16), 0);
-                frameLayout.addView(cell, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, 48, Gravity.TOP | Gravity.LEFT, 0, 0, 0, 0));
-                cell.setOnClickListener(v -> {
-                    CheckBoxCell cell1 = (CheckBoxCell) v;
-                    deleteForAll[0] = !deleteForAll[0];
-                    cell1.setChecked(deleteForAll[0], true);
-                });
-                builder.setView(frameLayout);
-                builder.setCustomViewOffset(9);
             }
         }
 
