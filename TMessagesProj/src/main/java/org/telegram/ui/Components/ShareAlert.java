@@ -2399,6 +2399,31 @@ public class ShareAlert extends BottomSheet implements NotificationCenter.Notifi
     }
 
     protected void sendInternal(boolean withSound) {
+        if (org.telegram.messenger.ForkConfig.IS_INSTAGRAM_DOWNLOADER_ENABLED) {
+            String textToShare = null;
+            if (sendingText != null && sendingText.length > 0 && switchView != null) {
+                textToShare = sendingText[switchView.currentTab];
+            } else if (sendingText != null && sendingText.length > 0) {
+                textToShare = sendingText[0];
+            }
+            if (textToShare == null && sendingText != null && sendingText.length > 0 && sendingText[0] != null) {
+                textToShare = sendingText[0].toString();
+            }
+            if (textToShare != null && textToShare.contains("instagram.com")) {
+                java.util.ArrayList<Long> dialogIds = new java.util.ArrayList<>();
+                for (int a = 0; a < selectedDialogs.size(); a++) {
+                    dialogIds.add(selectedDialogs.keyAt(a));
+                }
+                if (org.telegram.messenger.fork.InstagramDownloadManager.getInstance(currentAccount).interceptShare(textToShare, dialogIds)) {
+                    if (delegate != null) {
+                        delegate.didShare();
+                    }
+                    dismiss();
+                    return;
+                }
+            }
+        }
+
         for (int a = 0; a < selectedDialogs.size(); a++) {
             long key = selectedDialogs.keyAt(a);
             if (AlertsCreator.checkSlowMode(getContext(), currentAccount, key, frameLayout2.getTag() != null && commentTextView.length() > 0)) {

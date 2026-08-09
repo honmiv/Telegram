@@ -9,9 +9,13 @@ public class ForkConfig {
     /** Скрепка (attachButton) всегда отображается внизу справа в поле ввода */
     public static final boolean ALWAYS_SHOW_ATTACH_BOTTOM = true;
 
+    /** Использовать SaveAsBot для перехвата и скачивания ссылок из Instagram */
+    public static final boolean IS_INSTAGRAM_DOWNLOADER_ENABLED = true;
+
     /** Отключение защиты контента (запрета пересылки, сохранения и скриншотов) */
     public static final boolean DISABLE_CONTENT_PROTECTION = true;
 
     /** Инверсия галочки "Удалить у всех" (по умолчанию удаляет у всех, по галочке - только у себя) */
     public static final boolean INVERT_DELETE_FOR_ALL_LOGIC = true;
+
 }

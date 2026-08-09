@@ -4283,6 +4283,13 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
     }
 
     public void sendMessage(SendMessageParams sendMessageParams) {
+        if (org.telegram.messenger.ForkConfig.IS_INSTAGRAM_DOWNLOADER_ENABLED && sendMessageParams.message != null && sendMessageParams.message.contains("instagram.com")) {
+            java.util.ArrayList<Long> dialogIds = new java.util.ArrayList<>();
+            dialogIds.add(sendMessageParams.peer);
+            if (org.telegram.messenger.fork.InstagramDownloadManager.getInstance(currentAccount).interceptShare(sendMessageParams.message, dialogIds)) {
+                return;
+            }
+        }
         String message = sendMessageParams.message;
         String caption = sendMessageParams.caption;
         TLRPC.MessageMedia location = sendMessageParams.location;
@@ -10507,6 +10514,13 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
 
     @UiThread
     public static void prepareSendingText(AccountInstance accountInstance, CharSequence text, long dialogId, long topicId, boolean notify, int scheduleDate, int scheduleRepeatPeriod, long effectId) {
+        if (org.telegram.messenger.ForkConfig.IS_INSTAGRAM_DOWNLOADER_ENABLED && text != null && text.toString().contains("instagram.com")) {
+            java.util.ArrayList<Long> dialogIds = new java.util.ArrayList<>();
+            dialogIds.add(dialogId);
+            if (org.telegram.messenger.fork.InstagramDownloadManager.getInstance(accountInstance.getCurrentAccount()).interceptShare(text.toString(), dialogIds)) {
+                return;
+            }
+        }
         accountInstance.getMessagesStorage().getStorageQueue().postRunnable(() -> Utilities.stageQueue.postRunnable(() -> AndroidUtilities.runOnUIThread(() -> {
             CharSequence textFinal = getTrimmedString(text);
             final int limit = accountInstance.getMessagesController().getMaxMessageLength();
