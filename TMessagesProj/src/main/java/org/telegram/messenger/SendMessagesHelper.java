@@ -2064,6 +2064,527 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
         }
     }
 
+    public boolean isRestrictedMessage(MessageObject msgObj) {
+        if (msgObj == null || msgObj.messageOwner == null) {
+            return false;
+        }
+        if (msgObj.messageOwner.noforwards) {
+            return true;
+        }
+        if (msgObj.getDialogId() < 0) {
+            TLRPC.Chat sourceChat = getMessagesController().getChat(-msgObj.getDialogId());
+            if (sourceChat != null && sourceChat.noforwards) {
+                return true;
+            }
+        } else if (msgObj.getDialogId() > 0) {
+            TLRPC.UserFull userFull = getMessagesController().getUserFull(msgObj.getDialogId());
+            if (userFull != null && (userFull.noforwards_peer_enabled || userFull.noforwards_my_enabled)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public boolean hasRestrictedMessages(ArrayList<MessageObject> messages) {
+        if (messages == null || messages.isEmpty()) {
+            return false;
+        }
+        for (int a = 0; a < messages.size(); a++) {
+            if (isRestrictedMessage(messages.get(a))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public static class ForwardSendUnit {
+        public final ArrayList<MessageObject> messages = new ArrayList<>();
+        public long originalGroupId;
+
+        public boolean isAlbum() {
+            return originalGroupId != 0 && messages.size() > 1;
+        }
+    }
+
+    public static class FormattedForwardMessage {
+        public String message;
+        public ArrayList<TLRPC.MessageEntity> entities;
+
+        public FormattedForwardMessage(String message, ArrayList<TLRPC.MessageEntity> entities) {
+            this.message = message;
+            this.entities = entities;
+        }
+    }
+
+    private FormattedForwardMessage formatForwardAuthorHeader(MessageObject msgObj, boolean forwardFromMyName, boolean hideCaption) {
+        String originalMessage = (msgObj != null && msgObj.messageOwner != null && msgObj.messageOwner.message != null) ? msgObj.messageOwner.message : "";
+        ArrayList<TLRPC.MessageEntity> originalEntities = null;
+        if (msgObj != null && msgObj.messageOwner != null && msgObj.messageOwner.entities != null && !msgObj.messageOwner.entities.isEmpty()) {
+            originalEntities = new ArrayList<>();
+            for (int a = 0; a < msgObj.messageOwner.entities.size(); a++) {
+                TLRPC.MessageEntity entity = msgObj.messageOwner.entities.get(a);
+                if (entity instanceof TLRPC.TL_messageEntityBold ||
+                        entity instanceof TLRPC.TL_messageEntityItalic ||
+                        entity instanceof TLRPC.TL_messageEntityStrike ||
+                        entity instanceof TLRPC.TL_messageEntityUnderline ||
+                        entity instanceof TLRPC.TL_messageEntityPre ||
+                        entity instanceof TLRPC.TL_messageEntityCode ||
+                        entity instanceof TLRPC.TL_messageEntityTextUrl ||
+                        entity instanceof TLRPC.TL_messageEntityUrl ||
+                        entity instanceof TLRPC.TL_messageEntityMention ||
+                        entity instanceof TLRPC.TL_messageEntityMentionName ||
+                        entity instanceof TLRPC.TL_messageEntityHashtag ||
+                        entity instanceof TLRPC.TL_messageEntityCashtag ||
+                        entity instanceof TLRPC.TL_messageEntityEmail ||
+                        entity instanceof TLRPC.TL_messageEntityPhone ||
+                        entity instanceof TLRPC.TL_messageEntityBankCard ||
+                        entity instanceof TLRPC.TL_messageEntitySpoiler ||
+                        entity instanceof TLRPC.TL_messageEntityBlockquote ||
+                        entity instanceof TLRPC.TL_messageEntityCustomEmoji) {
+                    originalEntities.add(entity);
+                }
+            }
+        }
+
+        if (forwardFromMyName || hideCaption || msgObj == null || msgObj.messageOwner == null) {
+            return new FormattedForwardMessage(originalMessage, originalEntities);
+        }
+
+        String headerText = "";
+        if (msgObj.messageOwner.fwd_from != null) {
+            if (msgObj.messageOwner.fwd_from.from_id != null) {
+                long fromId = DialogObject.getPeerDialogId(msgObj.messageOwner.fwd_from.from_id);
+                if (fromId > 0) {
+                    TLRPC.User fromUser = getMessagesController().getUser(fromId);
+                    if (fromUser != null) headerText = ContactsController.formatName(fromUser.first_name, fromUser.last_name);
+                } else {
+                    TLRPC.Chat fromChat = getMessagesController().getChat(-fromId);
+                    if (fromChat != null) headerText = fromChat.title;
+                }
+            } else if (msgObj.messageOwner.fwd_from.from_name != null) {
+                headerText = msgObj.messageOwner.fwd_from.from_name;
+            }
+        } else if (msgObj.getDialogId() < 0) {
+            TLRPC.Chat fromChat = getMessagesController().getChat(-msgObj.getDialogId());
+            if (fromChat != null) headerText = fromChat.title;
+        } else if (msgObj.getDialogId() > 0) {
+            TLRPC.User fromUser = getMessagesController().getUser(msgObj.getDialogId());
+            if (fromUser != null) headerText = ContactsController.formatName(fromUser.first_name, fromUser.last_name);
+        }
+
+        String channelName = headerText;
+        if (!TextUtils.isEmpty(channelName)) {
+            String formattedMessage;
+            ArrayList<TLRPC.MessageEntity> entities = originalEntities != null ? new ArrayList<>(originalEntities) : new ArrayList<>();
+            TLRPC.TL_messageEntityBlockquote quoteEntity = new TLRPC.TL_messageEntityBlockquote();
+            TLRPC.TL_messageEntityBold boldEntity = new TLRPC.TL_messageEntityBold();
+
+            if (TextUtils.isEmpty(originalMessage)) {
+                formattedMessage = "From: " + channelName;
+                quoteEntity.offset = 0;
+                quoteEntity.length = formattedMessage.length();
+                boldEntity.offset = 6;
+                boldEntity.length = channelName.length();
+            } else {
+                String fullHeader = "\n\nFrom: " + channelName;
+                formattedMessage = originalMessage + fullHeader;
+                quoteEntity.offset = originalMessage.length() + 2;
+                quoteEntity.length = fullHeader.length() - 2;
+                boldEntity.offset = originalMessage.length() + 8;
+                boldEntity.length = channelName.length();
+            }
+            entities.add(quoteEntity);
+            entities.add(boldEntity);
+            return new FormattedForwardMessage(formattedMessage, entities);
+        }
+
+        return new FormattedForwardMessage(originalMessage, originalEntities);
+    }
+
+    private ArrayList<ForwardSendUnit> buildForwardSendUnits(ArrayList<MessageObject> messages) {
+        ArrayList<ForwardSendUnit> units = new ArrayList<>();
+        ForwardSendUnit currentUnit = null;
+        for (int a = 0; a < messages.size(); a++) {
+            MessageObject msgObj = messages.get(a);
+            long gId = (msgObj != null && msgObj.messageOwner != null) ? msgObj.messageOwner.grouped_id : 0;
+            if (gId != 0 && currentUnit != null && currentUnit.originalGroupId == gId) {
+                currentUnit.messages.add(msgObj);
+            } else {
+                currentUnit = new ForwardSendUnit();
+                currentUnit.originalGroupId = gId;
+                currentUnit.messages.add(msgObj);
+                units.add(currentUnit);
+            }
+        }
+        return units;
+    }
+
+    private class RestrictedForwardBatch implements NotificationCenter.NotificationCenterDelegate {
+        private final ArrayList<ForwardSendUnit> units;
+        private final long peer;
+        private final boolean forwardFromMyName;
+        private final boolean hideCaption;
+        private final boolean notify;
+        private final int scheduleDate;
+        private final int scheduleRepeatPeriod;
+        private final MessageObject replyToTopMsg;
+        private final int video_timestamp;
+        private final long payStars;
+        private final long monoForumPeerId;
+        private final MessageSuggestionParams suggestionParams;
+
+        private int currentUnitIndex = 0;
+        private int remainingMessagesInUnit = 0;
+        private final HashSet<Integer> handledOldIds = new HashSet<>();
+        private boolean isListening = false;
+        private final Runnable timeoutRunnable = this::onTimeout;
+
+        public RestrictedForwardBatch(
+                ArrayList<ForwardSendUnit> units,
+                long peer,
+                boolean forwardFromMyName,
+                boolean hideCaption,
+                boolean notify,
+                int scheduleDate,
+                int scheduleRepeatPeriod,
+                MessageObject replyToTopMsg,
+                int video_timestamp,
+                long payStars,
+                long monoForumPeerId,
+                MessageSuggestionParams suggestionParams
+        ) {
+            this.units = units;
+            this.peer = peer;
+            this.forwardFromMyName = forwardFromMyName;
+            this.hideCaption = hideCaption;
+            this.notify = notify;
+            this.scheduleDate = scheduleDate;
+            this.scheduleRepeatPeriod = scheduleRepeatPeriod;
+            this.replyToTopMsg = replyToTopMsg;
+            this.video_timestamp = video_timestamp;
+            this.payStars = payStars;
+            this.monoForumPeerId = monoForumPeerId;
+            this.suggestionParams = suggestionParams;
+        }
+
+        public void start() {
+            AndroidUtilities.runOnUIThread(this::sendNextUnit);
+        }
+
+        private void startListening() {
+            if (!isListening) {
+                isListening = true;
+                getNotificationCenter().addObserver(this, NotificationCenter.messageReceivedByServer);
+                getNotificationCenter().addObserver(this, NotificationCenter.messageSendError);
+                getNotificationCenter().addObserver(this, NotificationCenter.messagesDeleted);
+            }
+        }
+
+        private void stopListening() {
+            if (isListening) {
+                isListening = false;
+                getNotificationCenter().removeObserver(this, NotificationCenter.messageReceivedByServer);
+                getNotificationCenter().removeObserver(this, NotificationCenter.messageSendError);
+                getNotificationCenter().removeObserver(this, NotificationCenter.messagesDeleted);
+            }
+            AndroidUtilities.cancelRunOnUIThread(timeoutRunnable);
+        }
+
+        private int getExpectedCount(ForwardSendUnit unit) {
+            if (unit == null || unit.messages.isEmpty()) {
+                return 0;
+            }
+            if (unit.isAlbum()) {
+                int count = 0;
+                for (int a = 0; a < unit.messages.size(); a++) {
+                    MessageObject msg = unit.messages.get(a);
+                    if (msg == null || msg.messageOwner == null) {
+                        continue;
+                    }
+                    if (msg.messageOwner.media != null &&
+                            !(msg.messageOwner.media instanceof TLRPC.TL_messageMediaEmpty) &&
+                            !(msg.messageOwner.media instanceof TLRPC.TL_messageMediaWebPage)) {
+                        File localFile = FileLoader.getInstance(currentAccount).getPathToMessage(msg.messageOwner);
+                        if (localFile != null && localFile.exists()) {
+                            count++;
+                        }
+                    } else {
+                        count++;
+                    }
+                }
+                return count;
+            } else {
+                MessageObject msgObj = unit.messages.get(0);
+                if (msgObj == null || msgObj.messageOwner == null) {
+                    return 0;
+                }
+                if (msgObj.messageOwner.media != null &&
+                        !(msgObj.messageOwner.media instanceof TLRPC.TL_messageMediaEmpty) &&
+                        !(msgObj.messageOwner.media instanceof TLRPC.TL_messageMediaWebPage) &&
+                        !(msgObj.messageOwner.media instanceof TLRPC.TL_messageMediaGame) &&
+                        !(msgObj.messageOwner.media instanceof TLRPC.TL_messageMediaInvoice)) {
+                    if (msgObj.messageOwner.media.photo instanceof TLRPC.TL_photo || msgObj.messageOwner.media.document instanceof TLRPC.TL_document) {
+                        File localFile = FileLoader.getInstance(currentAccount).getPathToMessage(msgObj.messageOwner);
+                        if (localFile != null && localFile.exists()) {
+                            return 1;
+                        } else {
+                            return 0;
+                        }
+                    } else {
+                        return 1;
+                    }
+                } else if (msgObj.messageOwner.message != null) {
+                    return 1;
+                }
+                return 0;
+            }
+        }
+
+        private void sendNextUnit() {
+            AndroidUtilities.cancelRunOnUIThread(timeoutRunnable);
+            if (currentUnitIndex >= units.size()) {
+                stopListening();
+                return;
+            }
+
+            ForwardSendUnit unit = units.get(currentUnitIndex);
+            currentUnitIndex++;
+            handledOldIds.clear();
+
+            int expectedCount = getExpectedCount(unit);
+            if (expectedCount <= 0) {
+                if (unit.isAlbum()) {
+                    AndroidUtilities.runOnUIThread(() -> android.widget.Toast.makeText(ApplicationLoader.applicationContext, "Please download the media first to forward it from a restricted chat.", android.widget.Toast.LENGTH_SHORT).show());
+                } else if (!unit.messages.isEmpty()) {
+                    MessageObject msg = unit.messages.get(0);
+                    if (msg != null && msg.messageOwner != null && msg.messageOwner.media != null && (msg.messageOwner.media.photo instanceof TLRPC.TL_photo || msg.messageOwner.media.document instanceof TLRPC.TL_document)) {
+                        AndroidUtilities.runOnUIThread(() -> android.widget.Toast.makeText(ApplicationLoader.applicationContext, "Please download the file first to forward it from a restricted chat.", android.widget.Toast.LENGTH_SHORT).show());
+                    }
+                }
+                AndroidUtilities.runOnUIThread(this::sendNextUnit);
+                return;
+            }
+
+            remainingMessagesInUnit = expectedCount;
+            startListening();
+
+            try {
+                if (unit.isAlbum()) {
+                    sendAlbumUnit(unit);
+                } else if (!unit.messages.isEmpty()) {
+                    sendSingleUnit(unit.messages.get(0));
+                }
+            } catch (Exception e) {
+                FileLog.e(e);
+            }
+
+            AndroidUtilities.runOnUIThread(timeoutRunnable, 45000);
+        }
+
+        private void sendSingleUnit(MessageObject msgObj) {
+            if (msgObj == null || msgObj.messageOwner == null) {
+                return;
+            }
+            FormattedForwardMessage formatted = formatForwardAuthorHeader(msgObj, forwardFromMyName, hideCaption);
+            String caption = formatted.message;
+            ArrayList<TLRPC.MessageEntity> entities = formatted.entities;
+
+            if (msgObj.messageOwner.media != null &&
+                    !(msgObj.messageOwner.media instanceof TLRPC.TL_messageMediaEmpty) &&
+                    !(msgObj.messageOwner.media instanceof TLRPC.TL_messageMediaWebPage) &&
+                    !(msgObj.messageOwner.media instanceof TLRPC.TL_messageMediaGame) &&
+                    !(msgObj.messageOwner.media instanceof TLRPC.TL_messageMediaInvoice)) {
+
+                if (msgObj.messageOwner.media.photo instanceof TLRPC.TL_photo) {
+                    File localFile = FileLoader.getInstance(currentAccount).getPathToMessage(msgObj.messageOwner);
+                    if (localFile != null && localFile.exists()) {
+                        prepareSendingPhoto(AccountInstance.getInstance(currentAccount), localFile.getAbsolutePath(), null, null, peer, replyToTopMsg, replyToTopMsg, null, null, entities, null, null, msgObj.messageOwner.media.ttl_seconds, null, null, notify, scheduleDate, scheduleRepeatPeriod, 0, false, caption, null, 0, 0, payStars, monoForumPeerId, suggestionParams);
+                    }
+                } else if (msgObj.messageOwner.media.document instanceof TLRPC.TL_document) {
+                    File localFile = FileLoader.getInstance(currentAccount).getPathToMessage(msgObj.messageOwner);
+                    if (localFile != null && localFile.exists()) {
+                        ArrayList<String> paths = new ArrayList<>();
+                        paths.add(localFile.getAbsolutePath());
+                        prepareSendingDocuments(AccountInstance.getInstance(currentAccount), paths, paths, null, caption, entities, null, peer, replyToTopMsg, replyToTopMsg, null, null, null, notify, scheduleDate, scheduleRepeatPeriod, null, null, 0, 0, false, payStars, monoForumPeerId, suggestionParams, null, null, null, false);
+                    }
+                } else if (msgObj.messageOwner.media instanceof TLRPC.TL_messageMediaVenue || msgObj.messageOwner.media instanceof TLRPC.TL_messageMediaGeo) {
+                    SendMessagesHelper.SendMessageParams fparams = SendMessagesHelper.SendMessageParams.of(msgObj.messageOwner.media, peer, null, replyToTopMsg, null, null, notify, scheduleDate, scheduleRepeatPeriod);
+                    fparams.payStars = payStars;
+                    fparams.monoForumPeer = monoForumPeerId;
+                    fparams.suggestionParams = suggestionParams;
+                    sendMessage(fparams);
+                } else if (msgObj.messageOwner.media.phone_number != null) {
+                    TLRPC.User user = new TLRPC.TL_userContact_old2();
+                    user.phone = msgObj.messageOwner.media.phone_number;
+                    user.first_name = msgObj.messageOwner.media.first_name;
+                    user.last_name = msgObj.messageOwner.media.last_name;
+                    user.id = msgObj.messageOwner.media.user_id;
+                    SendMessagesHelper.SendMessageParams fparams = SendMessagesHelper.SendMessageParams.of(user, peer, null, replyToTopMsg, null, null, notify, scheduleDate, scheduleRepeatPeriod);
+                    fparams.monoForumPeer = monoForumPeerId;
+                    fparams.suggestionParams = suggestionParams;
+                    fparams.payStars = payStars;
+                    sendMessage(fparams);
+                }
+            } else if (msgObj.messageOwner.message != null) {
+                TLRPC.WebPage webPage = null;
+                if (msgObj.messageOwner.media instanceof TLRPC.TL_messageMediaWebPage) {
+                    webPage = msgObj.messageOwner.media.webpage;
+                }
+                SendMessagesHelper.SendMessageParams fparams = SendMessagesHelper.SendMessageParams.of(caption, peer, null, replyToTopMsg, webPage, true, entities, null, null, notify, scheduleDate, scheduleRepeatPeriod, null, false);
+                fparams.payStars = payStars;
+                fparams.monoForumPeer = monoForumPeerId;
+                fparams.suggestionParams = suggestionParams;
+                sendMessage(fparams);
+            }
+        }
+
+        private void sendAlbumUnit(ForwardSendUnit unit) {
+            boolean hasOnlyDocuments = true;
+            for (MessageObject msg : unit.messages) {
+                if (msg.messageOwner.media == null || !(msg.messageOwner.media.document instanceof TLRPC.TL_document) || msg.isVideo()) {
+                    hasOnlyDocuments = false;
+                    break;
+                }
+            }
+
+            if (hasOnlyDocuments) {
+                ArrayList<String> paths = new ArrayList<>();
+                for (MessageObject msg : unit.messages) {
+                    File localFile = FileLoader.getInstance(currentAccount).getPathToMessage(msg.messageOwner);
+                    if (localFile != null && localFile.exists()) {
+                        paths.add(localFile.getAbsolutePath());
+                    }
+                }
+                if (!paths.isEmpty()) {
+                    MessageObject firstMsg = unit.messages.get(0);
+                    FormattedForwardMessage formatted = formatForwardAuthorHeader(firstMsg, forwardFromMyName, hideCaption);
+                    prepareSendingDocuments(AccountInstance.getInstance(currentAccount), paths, paths, null, formatted.message, formatted.entities, null, peer, replyToTopMsg, replyToTopMsg, null, null, null, notify, scheduleDate, scheduleRepeatPeriod, null, null, 0, 0, false, payStars, monoForumPeerId, suggestionParams, null, null, null, false);
+                }
+            } else {
+                ArrayList<SendingMediaInfo> mediaInfos = new ArrayList<>();
+                int captionIndex = -1;
+                for (int i = 0; i < unit.messages.size(); i++) {
+                    MessageObject msg = unit.messages.get(i);
+                    if (msg != null && msg.messageOwner != null && !TextUtils.isEmpty(msg.messageOwner.message)) {
+                        captionIndex = i;
+                        break;
+                    }
+                }
+                if (captionIndex == -1) {
+                    captionIndex = 0;
+                }
+
+                for (int i = 0; i < unit.messages.size(); i++) {
+                    MessageObject msg = unit.messages.get(i);
+                    File localFile = FileLoader.getInstance(currentAccount).getPathToMessage(msg.messageOwner);
+                    if (localFile == null || !localFile.exists()) {
+                        continue;
+                    }
+                    SendingMediaInfo info = new SendingMediaInfo();
+                    info.path = localFile.getAbsolutePath();
+                    info.ttl = msg.messageOwner.media != null ? msg.messageOwner.media.ttl_seconds : 0;
+                    if (msg.isVideo()) {
+                        info.isVideo = true;
+                    }
+
+                    if (i == captionIndex) {
+                        FormattedForwardMessage formatted = formatForwardAuthorHeader(msg, forwardFromMyName, hideCaption);
+                        info.caption = formatted.message;
+                        info.entities = formatted.entities;
+                    } else {
+                        info.caption = "";
+                        info.entities = null;
+                    }
+                    mediaInfos.add(info);
+                }
+                if (!mediaInfos.isEmpty()) {
+                    prepareSendingMedia(AccountInstance.getInstance(currentAccount), mediaInfos, peer, replyToTopMsg, replyToTopMsg, null, null, false, true, null, null, notify, scheduleDate, scheduleRepeatPeriod, 0, false, null, null, 0, 0, false, payStars, monoForumPeerId, suggestionParams);
+                }
+            }
+        }
+
+        private void onTimeout() {
+            FileLog.w("RestrictedForwardBatch: timeout waiting for server confirmation of unit " + (currentUnitIndex - 1) + ", proceeding to next unit");
+            handledOldIds.clear();
+            remainingMessagesInUnit = 0;
+            sendNextUnit();
+        }
+
+        @Override
+        public void didReceivedNotification(int id, int account, Object... args) {
+            if (account != currentAccount || remainingMessagesInUnit <= 0) {
+                return;
+            }
+            if (id == NotificationCenter.messageReceivedByServer) {
+                int oldId = (Integer) args[0];
+                if (handledOldIds.add(oldId)) {
+                    remainingMessagesInUnit--;
+                    if (remainingMessagesInUnit <= 0) {
+                        AndroidUtilities.cancelRunOnUIThread(timeoutRunnable);
+                        AndroidUtilities.runOnUIThread(this::sendNextUnit, 100);
+                    }
+                }
+            } else if (id == NotificationCenter.messageSendError) {
+                int oldId = (Integer) args[0];
+                if (handledOldIds.add(oldId)) {
+                    remainingMessagesInUnit--;
+                    if (remainingMessagesInUnit <= 0) {
+                        AndroidUtilities.cancelRunOnUIThread(timeoutRunnable);
+                        AndroidUtilities.runOnUIThread(this::sendNextUnit, 100);
+                    }
+                }
+            } else if (id == NotificationCenter.messagesDeleted) {
+                ArrayList<Integer> deletedIds = (ArrayList<Integer>) args[0];
+                if (deletedIds != null && !deletedIds.isEmpty()) {
+                    for (int a = 0; a < deletedIds.size(); a++) {
+                        if (handledOldIds.add(deletedIds.get(a))) {
+                            remainingMessagesInUnit--;
+                        }
+                    }
+                    if (remainingMessagesInUnit <= 0) {
+                        AndroidUtilities.cancelRunOnUIThread(timeoutRunnable);
+                        AndroidUtilities.runOnUIThread(this::sendNextUnit, 100);
+                    }
+                }
+            }
+        }
+    }
+
+    private void sendRestrictedMessagesSequentially(
+            ArrayList<MessageObject> messages,
+            long peer,
+            boolean forwardFromMyName,
+            boolean hideCaption,
+            boolean notify,
+            int scheduleDate,
+            int scheduleRepeatPeriod,
+            MessageObject replyToTopMsg,
+            int video_timestamp,
+            long payStars,
+            long monoForumPeerId,
+            MessageSuggestionParams suggestionParams
+    ) {
+        if (messages == null || messages.isEmpty()) {
+            return;
+        }
+        ArrayList<ForwardSendUnit> units = buildForwardSendUnits(messages);
+        RestrictedForwardBatch batch = new RestrictedForwardBatch(
+                units,
+                peer,
+                forwardFromMyName,
+                hideCaption,
+                notify,
+                scheduleDate,
+                scheduleRepeatPeriod,
+                replyToTopMsg,
+                video_timestamp,
+                payStars,
+                monoForumPeerId,
+                suggestionParams
+        );
+        batch.start();
+    }
+
     public int sendMessage(ArrayList<MessageObject> messages, final long peer, boolean forwardFromMyName, boolean hideCaption, boolean notify, int scheduleDate, long payStars) {
         return sendMessage(messages, peer, forwardFromMyName, hideCaption, notify, scheduleDate, null, -1, payStars);
     }
@@ -2087,6 +2608,26 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
         MessageSuggestionParams suggestionParams
     ) {
         if (messages == null || messages.isEmpty()) {
+            return 0;
+        }
+        if (messages.size() > 1) {
+            try {
+                messages.sort((o1, o2) -> {
+                    int d1 = (o1 != null && o1.messageOwner != null) ? o1.messageOwner.date : 0;
+                    int d2 = (o2 != null && o2.messageOwner != null) ? o2.messageOwner.date : 0;
+                    if (d1 != d2) {
+                        return Integer.compare(d1, d2);
+                    }
+                    int id1 = o1 != null ? o1.getId() : 0;
+                    int id2 = o2 != null ? o2.getId() : 0;
+                    return Integer.compare(id1, id2);
+                });
+            } catch (Exception e) {
+                FileLog.e(e);
+            }
+        }
+        if (ForkConfig.DISABLE_CONTENT_PROTECTION && hasRestrictedMessages(messages)) {
+            sendRestrictedMessagesSequentially(messages, peer, forwardFromMyName, hideCaption, notify, scheduleDate, scheduleRepeatPeriod, replyToTopMsg, video_timestamp, payStars, monoForumPeerId, suggestionParams);
             return 0;
         }
         int sendResult = 0;
@@ -2176,84 +2717,6 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
                         params.quick_reply_shortcut = msgObj.getQuickReplyName();
                         params.quick_reply_shortcut_id = msgObj.getQuickReplyId();
                         sendMessage(params);
-                    }
-                    continue;
-                }
-
-                boolean isNoforwards = msgObj.messageOwner != null && msgObj.messageOwner.noforwards;
-                if (!isNoforwards && msgObj.getDialogId() < 0) {
-                    TLRPC.Chat sourceChat = getMessagesController().getChat(-msgObj.getDialogId());
-                    if (sourceChat != null) isNoforwards = sourceChat.noforwards;
-                } else if (!isNoforwards && msgObj.getDialogId() > 0) {
-                    TLRPC.UserFull userFull = getMessagesController().getUserFull(msgObj.getDialogId());
-                    if (userFull != null) isNoforwards = userFull.noforwards_peer_enabled || userFull.noforwards_my_enabled;
-                }
-                if (ForkConfig.DISABLE_CONTENT_PROTECTION && isNoforwards && !forwardFromMyName) {
-                    String headerText = "";
-                    if (msgObj.messageOwner.fwd_from != null) {
-                        if (msgObj.messageOwner.fwd_from.from_id != null) {
-                            long fromId = DialogObject.getPeerDialogId(msgObj.messageOwner.fwd_from.from_id);
-                            if (fromId > 0) {
-                                TLRPC.User fromUser = getMessagesController().getUser(fromId);
-                                if (fromUser != null) headerText = ContactsController.formatName(fromUser.first_name, fromUser.last_name);
-                            } else {
-                                TLRPC.Chat fromChat = getMessagesController().getChat(-fromId);
-                                if (fromChat != null) headerText = fromChat.title;
-                            }
-                        } else if (msgObj.messageOwner.fwd_from.from_name != null) {
-                            headerText = msgObj.messageOwner.fwd_from.from_name;
-                        }
-                    } else if (msgObj.getDialogId() < 0) {
-                        TLRPC.Chat fromChat = getMessagesController().getChat(-msgObj.getDialogId());
-                        if (fromChat != null) headerText = fromChat.title;
-                    } else if (msgObj.getDialogId() > 0) {
-                        TLRPC.User fromUser = getMessagesController().getUser(msgObj.getDialogId());
-                        if (fromUser != null) headerText = ContactsController.formatName(fromUser.first_name, fromUser.last_name);
-                    }
-
-                    String channelName = headerText;
-                    if (!TextUtils.isEmpty(channelName)) {
-                        headerText = "\n\nFrom: " + channelName;
-                    }
-
-                    String originalMessage = msgObj.messageOwner.message;
-                    ArrayList<TLRPC.MessageEntity> originalEntities = msgObj.messageOwner.entities;
-                    if (!TextUtils.isEmpty(channelName)) {
-                        msgObj.messageOwner.message = (originalMessage == null ? "" : originalMessage) + headerText;
-                        if (msgObj.messageOwner.entities == null) {
-                            msgObj.messageOwner.entities = new ArrayList<>();
-                        } else {
-                            msgObj.messageOwner.entities = new ArrayList<>(msgObj.messageOwner.entities);
-                        }
-                        
-                        TLRPC.TL_messageEntityBlockquote quoteEntity = new TLRPC.TL_messageEntityBlockquote();
-                        quoteEntity.offset = (originalMessage == null ? 0 : originalMessage.length()) + 2;
-                        quoteEntity.length = headerText.length() - 2;
-                        msgObj.messageOwner.entities.add(quoteEntity);
-
-                        TLRPC.TL_messageEntityBold boldEntity = new TLRPC.TL_messageEntityBold();
-                        boldEntity.offset = (originalMessage == null ? 0 : originalMessage.length()) + 8;
-                        boldEntity.length = channelName.length();
-                        msgObj.messageOwner.entities.add(boldEntity);
-                    }
-
-                    MessageObject originalReply = msgObj.replyMessageObject;
-                    TLRPC.MessageReplyHeader originalReplyHeader = msgObj.messageOwner.reply_to;
-                    int originalFlags = msgObj.messageOwner.flags;
-
-                    msgObj.replyMessageObject = null;
-                    msgObj.messageOwner.reply_to = null;
-                    msgObj.messageOwner.flags &= ~TLRPC.MESSAGE_FLAG_REPLY;
-
-                    processForwardFromMyName(msgObj, peer, payStars, monoForumPeerId, suggestionParams);
-
-                    msgObj.replyMessageObject = originalReply;
-                    msgObj.messageOwner.reply_to = originalReplyHeader;
-                    msgObj.messageOwner.flags = originalFlags;
-
-                    if (!TextUtils.isEmpty(channelName)) {
-                        msgObj.messageOwner.message = originalMessage;
-                        msgObj.messageOwner.entities = originalEntities;
                     }
                     continue;
                 }
