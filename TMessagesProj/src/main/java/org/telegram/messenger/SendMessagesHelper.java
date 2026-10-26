@@ -1830,7 +1830,7 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
             if (messageObject.messageOwner.media.photo instanceof TLRPC.TL_photo) {
                 java.io.File localFile = FileLoader.getInstance(currentAccount).getPathToMessage(messageObject.messageOwner);
                 if (localFile != null && localFile.exists()) {
-                    prepareSendingPhoto(AccountInstance.getInstance(currentAccount), localFile.getAbsolutePath(), null, null, did, null, null, null, null, entities, null, null, messageObject.messageOwner.media.ttl_seconds, null, null, true, 0, 0, 0, false, messageObject.messageOwner.message, null, 0, 0, payStars, monoForumPeerId, suggestionParams);
+                    prepareSendingPhoto(AccountInstance.getInstance(currentAccount), localFile.getAbsolutePath(), null, null, did, null, null, null, null, entities, null, null, messageObject.messageOwner.media.ttl_seconds, null, null, true, 0, 0, 0, false, messageObject.messageOwner.message, null, 0, payStars, monoForumPeerId, suggestionParams);
                 } else {
                     AndroidUtilities.runOnUIThread(() -> android.widget.Toast.makeText(ApplicationLoader.applicationContext, "Please download the photo first to forward it from a restricted chat.", android.widget.Toast.LENGTH_SHORT).show());
                 }
@@ -1839,7 +1839,7 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
                 if (localFile != null && localFile.exists()) {
                     ArrayList<String> paths = new ArrayList<>();
                     paths.add(localFile.getAbsolutePath());
-                    prepareSendingDocuments(AccountInstance.getInstance(currentAccount), paths, paths, null, messageObject.messageOwner.message, entities, null, did, null, null, null, null, null, true, 0, 0, null, null, 0, 0, false, payStars, monoForumPeerId, suggestionParams, null, null, null, false);
+                    prepareSendingDocuments(AccountInstance.getInstance(currentAccount), paths, paths, null, messageObject.messageOwner.message, entities, null, did, null, null, null, null, null, true, 0, 0, null, null, 0, false, payStars, monoForumPeerId, suggestionParams, null, null, null, false);
                 } else {
                     AndroidUtilities.runOnUIThread(() -> android.widget.Toast.makeText(ApplicationLoader.applicationContext, "Please download the document first to forward it from a restricted chat.", android.widget.Toast.LENGTH_SHORT).show());
                 }
@@ -2572,14 +2572,14 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
                 if (msgObj.messageOwner.media.photo instanceof TLRPC.TL_photo) {
                     File localFile = FileLoader.getInstance(currentAccount).getPathToMessage(msgObj.messageOwner);
                     if (localFile != null && localFile.exists()) {
-                        prepareSendingPhoto(AccountInstance.getInstance(currentAccount), localFile.getAbsolutePath(), null, null, peer, replyToTopMsg, replyToTopMsg, null, null, entities, null, null, msgObj.messageOwner.media.ttl_seconds, null, null, notify, scheduleDate, scheduleRepeatPeriod, 0, false, caption, null, 0, 0, payStars, monoForumPeerId, suggestionParams);
+                        prepareSendingPhoto(AccountInstance.getInstance(currentAccount), localFile.getAbsolutePath(), null, null, peer, replyToTopMsg, replyToTopMsg, null, null, entities, null, null, msgObj.messageOwner.media.ttl_seconds, null, null, notify, scheduleDate, scheduleRepeatPeriod, 0, false, caption, null, 0, payStars, monoForumPeerId, suggestionParams);
                     }
                 } else if (msgObj.messageOwner.media.document instanceof TLRPC.TL_document) {
                     File localFile = FileLoader.getInstance(currentAccount).getPathToMessage(msgObj.messageOwner);
                     if (localFile != null && localFile.exists()) {
                         ArrayList<String> paths = new ArrayList<>();
                         paths.add(localFile.getAbsolutePath());
-                        prepareSendingDocuments(AccountInstance.getInstance(currentAccount), paths, paths, null, caption, entities, null, peer, replyToTopMsg, replyToTopMsg, null, null, null, notify, scheduleDate, scheduleRepeatPeriod, null, null, 0, 0, false, payStars, monoForumPeerId, suggestionParams, null, null, null, false);
+                        prepareSendingDocuments(AccountInstance.getInstance(currentAccount), paths, paths, null, caption, entities, null, peer, replyToTopMsg, replyToTopMsg, null, null, null, notify, scheduleDate, scheduleRepeatPeriod, null, null, 0, false, payStars, monoForumPeerId, suggestionParams, null, null, null, false);
                     }
                 } else if (msgObj.messageOwner.media instanceof TLRPC.TL_messageMediaVenue || msgObj.messageOwner.media instanceof TLRPC.TL_messageMediaGeo) {
                     SendMessagesHelper.SendMessageParams fparams = SendMessagesHelper.SendMessageParams.of(msgObj.messageOwner.media, peer, null, replyToTopMsg, null, null, notify, scheduleDate, scheduleRepeatPeriod);
@@ -2632,7 +2632,7 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
                 if (!paths.isEmpty()) {
                     MessageObject firstMsg = unit.messages.get(0);
                     FormattedForwardMessage formatted = formatForwardAuthorHeader(firstMsg, forwardFromMyName, hideCaption);
-                    prepareSendingDocuments(AccountInstance.getInstance(currentAccount), paths, paths, null, formatted.message, formatted.entities, null, peer, replyToTopMsg, replyToTopMsg, null, null, null, notify, scheduleDate, scheduleRepeatPeriod, null, null, 0, 0, false, payStars, monoForumPeerId, suggestionParams, null, null, null, false);
+                    prepareSendingDocuments(AccountInstance.getInstance(currentAccount), paths, paths, null, formatted.message, formatted.entities, null, peer, replyToTopMsg, replyToTopMsg, null, null, null, notify, scheduleDate, scheduleRepeatPeriod, null, null, 0, false, payStars, monoForumPeerId, suggestionParams, null, null, null, false);
                 }
             } else {
                 ArrayList<SendingMediaInfo> mediaInfos = new ArrayList<>();
@@ -2672,7 +2672,7 @@ public class SendMessagesHelper extends BaseController implements NotificationCe
                     mediaInfos.add(info);
                 }
                 if (!mediaInfos.isEmpty()) {
-                    prepareSendingMedia(AccountInstance.getInstance(currentAccount), mediaInfos, peer, replyToTopMsg, replyToTopMsg, null, null, false, true, null, null, notify, scheduleDate, scheduleRepeatPeriod, 0, false, null, null, 0, 0, false, payStars, monoForumPeerId, suggestionParams);
+                    prepareSendingMedia(AccountInstance.getInstance(currentAccount), mediaInfos, peer, replyToTopMsg, replyToTopMsg, null, null, false, true, null, notify, scheduleDate, scheduleRepeatPeriod, 0, false, null, null, 0, false, payStars, monoForumPeerId, suggestionParams);
                 }
             }
         }

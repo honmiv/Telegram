@@ -36,7 +36,7 @@ import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.util.Base64;
 import com.google.zxing.EncodeHintType;
-import com.google.zxing.qrcode.QRCodeWriter;
+import org.telegram.messenger.TelegramQRCodeWriter;
 import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel;
 import android.graphics.Color;
 import android.graphics.Paint;
@@ -10897,7 +10897,7 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
                 HashMap<EncodeHintType, Object> hints = new HashMap<>();
                 hints.put(EncodeHintType.ERROR_CORRECTION, ErrorCorrectionLevel.M);
                 hints.put(EncodeHintType.MARGIN, 1);
-                QRCodeWriter writer = new QRCodeWriter();
+                TelegramQRCodeWriter writer = new TelegramQRCodeWriter();
                 return writer.encode(content, width, height, hints, null);
             } catch (Exception e) {
                 FileLog.e(e);
