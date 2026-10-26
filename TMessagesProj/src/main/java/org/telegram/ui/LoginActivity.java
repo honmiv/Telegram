@@ -34,6 +34,10 @@ import android.content.pm.PackageManager;
 import android.content.res.Configuration;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
+import android.util.Base64;
+import com.google.zxing.EncodeHintType;
+import com.google.zxing.qrcode.QRCodeWriter;
+import com.google.zxing.qrcode.decoder.ErrorCorrectionLevel;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Path;
@@ -267,7 +271,8 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
             VIEW_CODE_FRAGMENT_SMS = 15,
             VIEW_CODE_WORD = 16,
             VIEW_CODE_PHRASE = 17,
-            VIEW_PAY = 18;
+            VIEW_PAY = 18,
+            VIEW_QR_LOGIN = 19;
 
     public final static int COUNTRY_STATE_NOT_SET_OR_VALID = 0,
             COUNTRY_STATE_EMPTY = 1,
@@ -315,7 +320,8 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
             VIEW_CODE_FRAGMENT_SMS,
             VIEW_CODE_WORD,
             VIEW_CODE_PHRASE,
-            VIEW_PAY
+            VIEW_PAY,
+            VIEW_QR_LOGIN
     })
     private @interface ViewNumber {}
 
@@ -328,7 +334,7 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
 
     @ViewNumber
     private int currentViewNum;
-    private final SlideView[] views = new SlideView[19];
+    private final SlideView[] views = new SlideView[20];
     private CustomPhoneKeyboardView keyboardView;
     private ValueAnimator keyboardAnimator;
     private boolean paid;
@@ -708,6 +714,7 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
         views[VIEW_CODE_WORD] = new LoginActivityPhraseView(context, AUTH_TYPE_WORD);
         views[VIEW_CODE_PHRASE] = new LoginActivityPhraseView(context, AUTH_TYPE_PHRASE);
         views[VIEW_PAY] = new LoginPayView(context);
+        views[VIEW_QR_LOGIN] = new LoginActivityQrView(context);
 
         for (int a = 0; a < views.length; a++) {
             views[a].setVisibility(a == 0 ? View.VISIBLE : View.GONE);
@@ -2531,6 +2538,19 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
                     }
                     loadCountries();
                 });
+            }
+
+            if (org.telegram.messenger.ForkConfig.IS_QR_LOGIN_ENABLED && activityMode == MODE_LOGIN) {
+                TextView qrLoginButton = new TextView(context);
+                qrLoginButton.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 15);
+                qrLoginButton.setTypeface(AndroidUtilities.bold());
+                qrLoginButton.setText("Быстрый вход по QR-коду");
+                qrLoginButton.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlueText));
+                qrLoginButton.setGravity(Gravity.CENTER);
+                qrLoginButton.setPadding(AndroidUtilities.dp(16), AndroidUtilities.dp(10), AndroidUtilities.dp(16), AndroidUtilities.dp(10));
+                qrLoginButton.setBackground(Theme.createSimpleSelectorRoundRectDrawable(AndroidUtilities.dp(8), 0, Theme.getColor(Theme.key_windowBackgroundWhiteBlueText) & 0x1f));
+                addView(qrLoginButton, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_HORIZONTAL, 0, 12, 0, 12));
+                qrLoginButton.setOnClickListener(v -> setPage(VIEW_QR_LOGIN, true, null, false));
             }
 
             if (bottomMargin > 0 && !AndroidUtilities.isSmallScreen()) {
@@ -10668,6 +10688,232 @@ public class LoginActivity extends BaseFragment implements NotificationCenter.No
         public void onHide() {
             super.onHide();
             stopPoll();
+        }
+    }
+
+    public class LoginActivityQrView extends SlideView {
+
+        private ImageView qrImageView;
+        private TextView titleView;
+        private TextView subtitleView;
+        private RadialProgressView progressView;
+        private FrameLayout qrContainer;
+
+        private String currentTokenBase64;
+        private Runnable checkTokenRunnable;
+        private boolean isExpired = false;
+        private boolean isChecking = false;
+        private int reqId = 0;
+
+        public LoginActivityQrView(Context context) {
+            super(context);
+            setOrientation(VERTICAL);
+            setGravity(Gravity.CENTER_HORIZONTAL);
+
+            titleView = new TextView(context);
+            titleView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 20);
+            titleView.setTypeface(AndroidUtilities.bold());
+            titleView.setText("Вход по QR-коду");
+            titleView.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText));
+            titleView.setGravity(Gravity.CENTER);
+            addView(titleView, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_HORIZONTAL, 32, 24, 32, 0));
+
+            subtitleView = new TextView(context);
+            subtitleView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14);
+            subtitleView.setText("Откройте Telegram на другом устройстве:\nНастройки > Устройства > Подключить устройство");
+            subtitleView.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteGrayText));
+            subtitleView.setGravity(Gravity.CENTER);
+            subtitleView.setLineSpacing(dp(2), 1.0f);
+            addView(subtitleView, LayoutHelper.createLinear(LayoutHelper.MATCH_PARENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_HORIZONTAL, 32, 8, 32, 16));
+
+            qrContainer = new FrameLayout(context);
+            addView(qrContainer, LayoutHelper.createLinear(240, 240, Gravity.CENTER_HORIZONTAL, 0, 16, 0, 16));
+
+            qrImageView = new ImageView(context);
+            qrContainer.addView(qrImageView, LayoutHelper.createFrame(LayoutHelper.MATCH_PARENT, LayoutHelper.MATCH_PARENT));
+
+            progressView = new RadialProgressView(context);
+            progressView.setSize(AndroidUtilities.dp(36));
+            qrContainer.addView(progressView, LayoutHelper.createFrame(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER));
+
+            TextView backButton = new TextView(context);
+            backButton.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 15);
+            backButton.setTypeface(AndroidUtilities.bold());
+            backButton.setText("Войти по номеру телефона");
+            backButton.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlueText));
+            backButton.setGravity(Gravity.CENTER);
+            backButton.setPadding(AndroidUtilities.dp(16), AndroidUtilities.dp(12), AndroidUtilities.dp(16), AndroidUtilities.dp(12));
+            backButton.setBackground(Theme.createSimpleSelectorRoundRectDrawable(AndroidUtilities.dp(8), 0, Theme.getColor(Theme.key_windowBackgroundWhiteBlueText) & 0x1f));
+            addView(backButton, LayoutHelper.createLinear(LayoutHelper.WRAP_CONTENT, LayoutHelper.WRAP_CONTENT, Gravity.CENTER_HORIZONTAL, 0, 20, 0, 16));
+
+            backButton.setOnClickListener(v -> setPage(VIEW_PHONE_INPUT, true, null, true));
+
+            qrContainer.setOnClickListener(v -> {
+                if (isExpired) {
+                    requestLoginToken();
+                }
+            });
+        }
+
+        @Override
+        public boolean needBackButton() {
+            return true;
+        }
+
+        @Override
+        public String getHeaderName() {
+            return "Вход по QR-коду";
+        }
+
+        @Override
+        public void onShow() {
+            super.onShow();
+            requestLoginToken();
+        }
+
+        @Override
+        public void onHide() {
+            super.onHide();
+            cancelCheckToken();
+        }
+
+        @Override
+        public void onDestroyActivity() {
+            super.onDestroyActivity();
+            cancelCheckToken();
+        }
+
+        @Override
+        public boolean onBackPressed(boolean force) {
+            cancelCheckToken();
+            return true;
+        }
+
+        private void requestLoginToken() {
+            cancelCheckToken();
+            progressView.setVisibility(VISIBLE);
+            qrImageView.setAlpha(0.3f);
+            isExpired = false;
+
+            TLRPC.TL_auth_exportLoginToken req = new TLRPC.TL_auth_exportLoginToken();
+            req.api_id = BuildVars.APP_ID;
+            req.api_hash = BuildVars.APP_HASH;
+            req.except_ids = new ArrayList<>();
+
+            reqId = getConnectionsManager().sendRequest(req, (response, error) -> {
+                AndroidUtilities.runOnUIThread(() -> {
+                    if (error != null) {
+                        Toast.makeText(getContext(), "Ошибка: " + error.text, Toast.LENGTH_SHORT).show();
+                        progressView.setVisibility(GONE);
+                        qrImageView.setAlpha(1.0f);
+                        return;
+                    }
+                    if (response instanceof TLRPC.TL_auth_loginToken) {
+                        TLRPC.TL_auth_loginToken tokenObj = (TLRPC.TL_auth_loginToken) response;
+                        currentTokenBase64 = Base64.encodeToString(tokenObj.token, Base64.URL_SAFE | Base64.NO_WRAP | Base64.NO_PADDING);
+
+                        String qrUrl = "tg://login?token=" + currentTokenBase64;
+                        Bitmap qrBitmap = generateQrBitmap(qrUrl, AndroidUtilities.dp(240), AndroidUtilities.dp(240));
+                        if (qrBitmap != null) {
+                            qrImageView.setImageBitmap(qrBitmap);
+                        }
+                        progressView.setVisibility(GONE);
+                        qrImageView.setAlpha(1.0f);
+
+                        int delay = Math.max(3, tokenObj.expires - getConnectionsManager().getCurrentTime());
+                        scheduleCheckToken(delay * 1000L);
+                    } else if (response instanceof TLRPC.TL_auth_loginTokenSuccess) {
+                        onSuccessTokenLogin((TLRPC.TL_auth_loginTokenSuccess) response);
+                    } else if (response instanceof TLRPC.TL_auth_loginTokenMigrateTo) {
+                        TLRPC.TL_auth_loginTokenMigrateTo migrateTo = (TLRPC.TL_auth_loginTokenMigrateTo) response;
+                        getConnectionsManager().setDefaultDatacenterId(migrateTo.dc_id);
+                        requestLoginToken();
+                    }
+                });
+            });
+        }
+
+        private void scheduleCheckToken(long delayMs) {
+            checkTokenRunnable = () -> {
+                if (!isChecking) {
+                    checkTokenState();
+                }
+            };
+            AndroidUtilities.runOnUIThread(checkTokenRunnable, delayMs);
+        }
+
+        private void checkTokenState() {
+            if (isChecking) return;
+            isChecking = true;
+
+            TLRPC.TL_auth_exportLoginToken req = new TLRPC.TL_auth_exportLoginToken();
+            req.api_id = BuildVars.APP_ID;
+            req.api_hash = BuildVars.APP_HASH;
+            req.except_ids = new ArrayList<>();
+
+            reqId = getConnectionsManager().sendRequest(req, (response, error) -> {
+                AndroidUtilities.runOnUIThread(() -> {
+                    isChecking = false;
+                    if (response instanceof TLRPC.TL_auth_loginToken) {
+                        TLRPC.TL_auth_loginToken tokenObj = (TLRPC.TL_auth_loginToken) response;
+                        currentTokenBase64 = Base64.encodeToString(tokenObj.token, Base64.URL_SAFE | Base64.NO_WRAP | Base64.NO_PADDING);
+
+                        String qrUrl = "tg://login?token=" + currentTokenBase64;
+                        Bitmap qrBitmap = generateQrBitmap(qrUrl, AndroidUtilities.dp(240), AndroidUtilities.dp(240));
+                        if (qrBitmap != null) {
+                            qrImageView.setImageBitmap(qrBitmap);
+                        }
+                        int delay = Math.max(3, tokenObj.expires - getConnectionsManager().getCurrentTime());
+                        scheduleCheckToken(delay * 1000L);
+                    } else if (response instanceof TLRPC.TL_auth_loginTokenSuccess) {
+                        onSuccessTokenLogin((TLRPC.TL_auth_loginTokenSuccess) response);
+                    } else if (response instanceof TLRPC.TL_auth_loginTokenMigrateTo) {
+                        TLRPC.TL_auth_loginTokenMigrateTo migrateTo = (TLRPC.TL_auth_loginTokenMigrateTo) response;
+                        getConnectionsManager().setDefaultDatacenterId(migrateTo.dc_id);
+                        requestLoginToken();
+                    } else {
+                        isExpired = true;
+                        qrImageView.setAlpha(0.2f);
+                        progressView.setVisibility(GONE);
+                        Toast.makeText(getContext(), "QR-код истёк. Нажмите для обновления.", Toast.LENGTH_SHORT).show();
+                    }
+                });
+            });
+        }
+
+        private void cancelCheckToken() {
+            if (checkTokenRunnable != null) {
+                AndroidUtilities.cancelRunOnUIThread(checkTokenRunnable);
+                checkTokenRunnable = null;
+            }
+            if (reqId != 0) {
+                getConnectionsManager().cancelRequest(reqId, true);
+                reqId = 0;
+            }
+        }
+
+        private Bitmap generateQrBitmap(String content, int width, int height) {
+            try {
+                HashMap<EncodeHintType, Object> hints = new HashMap<>();
+                hints.put(EncodeHintType.ERROR_CORRECTION, ErrorCorrectionLevel.M);
+                hints.put(EncodeHintType.MARGIN, 1);
+                QRCodeWriter writer = new QRCodeWriter();
+                return writer.encode(content, width, height, hints, null);
+            } catch (Exception e) {
+                FileLog.e(e);
+                return null;
+            }
+        }
+
+        private void onSuccessTokenLogin(TLRPC.TL_auth_loginTokenSuccess res) {
+            cancelCheckToken();
+            if (res.authorization instanceof TLRPC.TL_auth_authorization) {
+                TLRPC.TL_auth_authorization auth = (TLRPC.TL_auth_authorization) res.authorization;
+                onAuthSuccess(auth, false);
+            } else if (res.authorization instanceof TLRPC.TL_auth_authorizationSignUpRequired) {
+                Toast.makeText(getContext(), "Требуется регистрация на мобильном устройстве", Toast.LENGTH_LONG).show();
+                setPage(VIEW_PHONE_INPUT, true, null, true);
+            }
         }
     }
 

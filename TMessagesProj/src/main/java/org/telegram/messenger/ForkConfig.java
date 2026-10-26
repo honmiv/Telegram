@@ -18,4 +18,7 @@ public class ForkConfig {
     /** Инверсия галочки "Удалить у всех" (по умолчанию удаляет у всех, по галочке - только у себя) */
     public static final boolean INVERT_DELETE_FOR_ALL_LOGIC = true;
 
+    /** Разрешить вход по QR-коду на экране авторизации */
+    public static final boolean IS_QR_LOGIN_ENABLED = true;
+
 }
