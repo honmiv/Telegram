@@ -23,6 +23,7 @@ public class InstagramDownloadManager implements NotificationCenter.Notification
     
     // State of the current interception
     private boolean isWaitingForBot = false;
+    private boolean isSendingOriginalLink = false;
     private String currentText = null;
     private ArrayList<Long> targetDialogIds = new ArrayList<>();
     private Runnable timeoutRunnable;
@@ -47,6 +48,10 @@ public class InstagramDownloadManager implements NotificationCenter.Notification
     }
 
     public boolean interceptShare(String text, ArrayList<Long> dialogIds) {
+        if (isSendingOriginalLink) {
+            return false;
+        }
+
         if (text == null || !text.contains("instagram.com")) {
             return false;
         }
@@ -121,6 +126,8 @@ public class InstagramDownloadManager implements NotificationCenter.Notification
 
     private void cleanup() {
         isWaitingForBot = false;
+        isSendingOriginalLink = false;
+        currentText = null;
         NotificationCenter.getInstance(currentAccount).removeObserver(this, NotificationCenter.didReceiveNewMessages);
         if (timeoutRunnable != null) {
             AndroidUtilities.cancelRunOnUIThread(timeoutRunnable);
@@ -181,6 +188,17 @@ public class InstagramDownloadManager implements NotificationCenter.Notification
             SendMessagesHelper.getInstance(currentAccount).sendMessage(
                     collectedMediaMessages, targetId, true, false, true, 0, 0, null, 0, 0, 0, null
             );
+
+            if (currentText != null) {
+                isSendingOriginalLink = true;
+                try {
+                    SendMessagesHelper.getInstance(currentAccount).sendMessage(
+                            SendMessagesHelper.SendMessageParams.of(currentText, targetId, null, null, null, true, null, null, null, true, 0, 0, null, false)
+                    );
+                } finally {
+                    isSendingOriginalLink = false;
+                }
+            }
         }
 
         for (MessageObject msg : collectedMediaMessages) {
